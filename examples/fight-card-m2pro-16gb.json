@@ -1,0 +1,382 @@
+{
+  "generated_at": "2026-11-20T17:26:12+00:00",
+  "game": {
+    "name": "Codebreaker",
+    "code_length": 4,
+    "digits": "1-6",
+    "rounds": 20,
+    "max_guesses": 10,
+    "timeout_seconds": 60.0,
+    "max_tokens": 300,
+    "seed": 810218
+  },
+  "strategy_sha256": "935d8143edb2",
+  "machine": {
+    "os": "macOS 26.5.2",
+    "arch": "arm64",
+    "python": "3.13.7",
+    "cpu": "Apple M2 Pro",
+    "ram_gb": 16,
+    "gpu": "Apple M2 Pro",
+    "gpu_note": "unified memory"
+  },
+  "gateway": {
+    "otari_url": "http://localhost:8000",
+    "otari_version": "0.54.0",
+    "ollama_version": "0.40.2"
+  },
+  "fighters": [
+    {
+      "corner": "A",
+      "model": "llama3.2:3b",
+      "otari_alias": "fighter-a",
+      "wins": 2,
+      "losses": 18,
+      "ties": 0,
+      "cracked": 1,
+      "avg_guesses": 10.55,
+      "avg_guesses_when_cracked": 2,
+      "avg_seconds_per_guess": 0.46,
+      "total_seconds": 89.2,
+      "malformed_replies": 0,
+      "timeouts": 0,
+      "otari_usage": {
+        "requests": 192,
+        "errors": 0,
+        "prompt_tokens": 73566,
+        "completion_tokens": 4453,
+        "avg_gateway_latency_ms": 445,
+        "cost_usd": 0.0
+      }
+    },
+    {
+      "corner": "B",
+      "model": "qwen2.5:3b",
+      "otari_alias": "fighter-b",
+      "wins": 18,
+      "losses": 2,
+      "ties": 0,
+      "cracked": 0,
+      "avg_guesses": 11,
+      "avg_guesses_when_cracked": null,
+      "avg_seconds_per_guess": 0.25,
+      "total_seconds": 49.4,
+      "malformed_replies": 0,
+      "timeouts": 0,
+      "otari_usage": {
+        "requests": 200,
+        "errors": 0,
+        "prompt_tokens": 62500,
+        "completion_tokens": 1000,
+        "avg_gateway_latency_ms": 230,
+        "cost_usd": 0.0
+      }
+    }
+  ],
+  "result": {
+    "winner": "B (qwen2.5:3b)",
+    "record": "A 2 - 18 B"
+  },
+  "rounds": [
+    {
+      "n": 1,
+      "secret": "4116",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 11.0
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 4.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 2,
+      "secret": "3263",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 4.5
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 8.5
+      },
+      "winner": "a"
+    },
+    {
+      "n": 3,
+      "secret": "3241",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 4.2
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.0
+      },
+      "winner": "b"
+    },
+    {
+      "n": 4,
+      "secret": "5133",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.2
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 1.9
+      },
+      "winner": "b"
+    },
+    {
+      "n": 5,
+      "secret": "1245",
+      "a": {
+        "score": 2,
+        "cracked": true,
+        "seconds": 0.9
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 1.9
+      },
+      "winner": "a"
+    },
+    {
+      "n": 6,
+      "secret": "2566",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 4.4
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.0
+      },
+      "winner": "b"
+    },
+    {
+      "n": 7,
+      "secret": "6532",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 3.6
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.0
+      },
+      "winner": "b"
+    },
+    {
+      "n": 8,
+      "secret": "2366",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 3.5
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 9,
+      "secret": "4123",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 3.7
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 10,
+      "secret": "3634",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 7.8
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 11,
+      "secret": "1522",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.2
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 12,
+      "secret": "2315",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 3.5
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 13,
+      "secret": "3613",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 4.0
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.2
+      },
+      "winner": "b"
+    },
+    {
+      "n": 14,
+      "secret": "5666",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 6.5
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.0
+      },
+      "winner": "b"
+    },
+    {
+      "n": 15,
+      "secret": "3153",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 8.1
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 16,
+      "secret": "3554",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.2
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 1.9
+      },
+      "winner": "b"
+    },
+    {
+      "n": 17,
+      "secret": "1665",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 5.4
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.0
+      },
+      "winner": "b"
+    },
+    {
+      "n": 18,
+      "secret": "5521",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 4.3
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 19,
+      "secret": "6353",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 3.9
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 20,
+      "secret": "1556",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 3.5
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "seconds": 2.0
+      },
+      "winner": "b"
+    }
+  ]
+}
