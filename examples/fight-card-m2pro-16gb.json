@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20T17:41:22+00:00",
+  "generated_at": "2026-11-20T17:52:31+00:00",
   "game": {
     "name": "Codebreaker",
     "code_length": 4,
@@ -8,7 +8,7 @@
     "max_guesses": 10,
     "timeout_seconds": 60.0,
     "max_tokens": 300,
-    "seed": 810218
+    "seed": 15620
   },
   "strategy_sha256": "07331cf912c0",
   "machine": {
@@ -28,433 +28,433 @@
   "fighters": [
     {
       "corner": "A",
-      "model": "llama3.2:3b",
+      "model": "llama3.1:8b",
       "otari_alias": "fighter-a",
-      "wins": 3,
-      "losses": 17,
+      "wins": 5,
+      "losses": 15,
       "ties": 0,
       "cracked": 0,
       "avg_guesses": 11,
       "avg_guesses_when_cracked": null,
-      "avg_seconds_per_guess": 0.35,
-      "total_seconds": 70.8,
-      "malformed_replies": 0,
+      "avg_seconds_per_guess": 1.96,
+      "total_seconds": 391.5,
+      "malformed_replies": 16,
       "timeouts": 0,
       "otari_usage": {
         "requests": 200,
         "errors": 0,
-        "prompt_tokens": 73779,
-        "completion_tokens": 3109,
-        "avg_gateway_latency_ms": 334,
+        "prompt_tokens": 90012,
+        "completion_tokens": 7840,
+        "avg_gateway_latency_ms": 1924,
         "cost_usd": 0.0
       }
     },
     {
       "corner": "B",
-      "model": "qwen2.5:3b",
+      "model": "qwen2.5:7b",
       "otari_alias": "fighter-b",
-      "wins": 17,
-      "losses": 3,
+      "wins": 15,
+      "losses": 5,
       "ties": 0,
       "cracked": 0,
       "avg_guesses": 11,
       "avg_guesses_when_cracked": null,
-      "avg_seconds_per_guess": 0.22,
-      "total_seconds": 44.4,
-      "malformed_replies": 1,
+      "avg_seconds_per_guess": 0.7,
+      "total_seconds": 140.8,
+      "malformed_replies": 3,
       "timeouts": 0,
       "otari_usage": {
         "requests": 200,
         "errors": 0,
-        "prompt_tokens": 64700,
+        "prompt_tokens": 64703,
         "completion_tokens": 1000,
-        "avg_gateway_latency_ms": 203,
+        "avg_gateway_latency_ms": 679,
         "cost_usd": 0.0
       }
     }
   ],
   "result": {
-    "winner": "B (qwen2.5:3b)",
-    "record": "A 3 - 17 B"
+    "winner": "B (qwen2.5:7b)",
+    "record": "A 5 - 15 B"
   },
   "rounds": [
     {
       "n": 1,
-      "secret": "4116",
+      "secret": "6213",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 0,
-        "seconds": 3.2
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 23.6
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
         "best_misplaced": 2,
-        "seconds": 2.1
+        "seconds": 7.2
       },
-      "winner": "a"
+      "winner": "b"
     },
     {
       "n": 2,
-      "secret": "3263",
+      "secret": "3151",
       "a": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 1,
-        "best_misplaced": 1,
-        "seconds": 3.2
-      },
-      "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
         "best_misplaced": 0,
-        "seconds": 2.2
+        "seconds": 8.7
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 6.2
       },
       "winner": "b"
     },
     {
       "n": 3,
-      "secret": "3241",
+      "secret": "3561",
       "a": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 7.0
+      },
+      "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
         "best_misplaced": 1,
-        "seconds": 3.2
+        "seconds": 6.6
       },
-      "b": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 2,
-        "seconds": 2.1
-      },
-      "winner": "b"
+      "winner": "a"
     },
     {
       "n": 4,
-      "secret": "5133",
+      "secret": "4232",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
-        "best_misplaced": 0,
-        "seconds": 3.4
+        "best_misplaced": 1,
+        "seconds": 6.0
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
+        "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.1
+        "seconds": 7.0
       },
       "winner": "b"
     },
     {
       "n": 5,
-      "secret": "1245",
+      "secret": "6245",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
-        "best_misplaced": 3,
-        "seconds": 3.2
+        "best_misplaced": 2,
+        "seconds": 6.8
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 1,
-        "seconds": 2.1
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 6.8
       },
       "winner": "b"
     },
     {
       "n": 6,
-      "secret": "2566",
+      "secret": "3616",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 1,
-        "best_misplaced": 1,
-        "seconds": 3.5
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 19.9
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
         "best_misplaced": 0,
-        "seconds": 2.5
+        "seconds": 7.1
       },
       "winner": "b"
     },
     {
       "n": 7,
-      "secret": "6532",
+      "secret": "1211",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 3,
+        "best_exact": 2,
         "best_misplaced": 0,
-        "seconds": 3.9
+        "seconds": 17.0
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.2
+        "seconds": 6.9
       },
       "winner": "b"
     },
     {
       "n": 8,
-      "secret": "2366",
+      "secret": "3542",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 48.1
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 0,
+        "best_misplaced": 4,
+        "seconds": 6.8
+      },
+      "winner": "a"
+    },
+    {
+      "n": 9,
+      "secret": "4246",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
         "best_misplaced": 1,
-        "seconds": 3.1
+        "seconds": 32.5
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
         "best_misplaced": 0,
-        "seconds": 2.3
-      },
-      "winner": "b"
-    },
-    {
-      "n": 9,
-      "secret": "4123",
-      "a": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 1,
-        "seconds": 3.4
-      },
-      "b": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 3,
-        "best_misplaced": 0,
-        "seconds": 2.4
+        "seconds": 7.4
       },
       "winner": "b"
     },
     {
       "n": 10,
-      "secret": "3634",
+      "secret": "3421",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 1,
+        "best_exact": 2,
         "best_misplaced": 2,
-        "seconds": 3.3
+        "seconds": 15.5
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
         "best_misplaced": 2,
-        "seconds": 2.3
+        "seconds": 7.1
       },
-      "winner": "b"
+      "winner": "a"
     },
     {
       "n": 11,
-      "secret": "1522",
+      "secret": "1566",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
         "best_misplaced": 1,
-        "seconds": 3.6
+        "seconds": 10.1
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
+        "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.2
+        "seconds": 7.2
       },
       "winner": "b"
     },
     {
       "n": 12,
-      "secret": "2315",
+      "secret": "2152",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 1,
-        "best_misplaced": 2,
-        "seconds": 3.2
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 19.3
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.2
+        "seconds": 7.5
       },
       "winner": "b"
     },
     {
       "n": 13,
-      "secret": "3613",
+      "secret": "5254",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 1,
-        "best_misplaced": 1,
-        "seconds": 3.3
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 22.2
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
         "best_misplaced": 0,
-        "seconds": 2.2
+        "seconds": 7.3
       },
-      "winner": "b"
+      "winner": "a"
     },
     {
       "n": 14,
-      "secret": "5666",
+      "secret": "6241",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
-        "best_misplaced": 1,
-        "seconds": 4.7
+        "best_misplaced": 2,
+        "seconds": 20.2
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
-        "best_misplaced": 1,
-        "seconds": 2.2
+        "best_misplaced": 2,
+        "seconds": 7.2
       },
       "winner": "b"
     },
     {
       "n": 15,
-      "secret": "3153",
-      "a": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 0,
-        "seconds": 3.2
-      },
-      "b": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 0,
-        "seconds": 2.3
-      },
-      "winner": "b"
-    },
-    {
-      "n": 16,
-      "secret": "3554",
+      "secret": "1463",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
         "best_misplaced": 1,
-        "seconds": 3.4
+        "seconds": 34.5
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 0,
-        "seconds": 2.1
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 7.0
       },
       "winner": "a"
     },
     {
-      "n": 17,
-      "secret": "1665",
+      "n": 16,
+      "secret": "3351",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 0,
-        "best_misplaced": 2,
-        "seconds": 3.1
+        "best_exact": 2,
+        "best_misplaced": 1,
+        "seconds": 13.6
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
+        "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.2
+        "seconds": 8.1
+      },
+      "winner": "b"
+    },
+    {
+      "n": 17,
+      "secret": "5521",
+      "a": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 9.9
+      },
+      "b": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 6.9
       },
       "winner": "b"
     },
     {
       "n": 18,
-      "secret": "5521",
+      "secret": "5432",
       "a": {
         "score": 11,
         "cracked": false,
-        "best_exact": 3,
-        "best_misplaced": 0,
-        "seconds": 3.9
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 50.4
       },
       "b": {
+        "score": 11,
+        "cracked": false,
+        "best_exact": 2,
+        "best_misplaced": 2,
+        "seconds": 6.8
+      },
+      "winner": "b"
+    },
+    {
+      "n": 19,
+      "secret": "1252",
+      "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 2,
         "best_misplaced": 1,
-        "seconds": 2.2
-      },
-      "winner": "a"
-    },
-    {
-      "n": 19,
-      "secret": "6353",
-      "a": {
-        "score": 11,
-        "cracked": false,
-        "best_exact": 2,
-        "best_misplaced": 0,
-        "seconds": 3.2
+        "seconds": 8.5
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "best_exact": 2,
+        "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.1
+        "seconds": 6.7
       },
       "winner": "b"
     },
     {
       "n": 20,
-      "secret": "1556",
+      "secret": "3526",
       "a": {
         "score": 11,
         "cracked": false,
         "best_exact": 1,
-        "best_misplaced": 0,
-        "seconds": 5.9
+        "best_misplaced": 3,
+        "seconds": 17.8
       },
       "b": {
         "score": 11,
         "cracked": false,
         "best_exact": 3,
         "best_misplaced": 0,
-        "seconds": 2.3
+        "seconds": 6.9
       },
       "winner": "b"
     }

@@ -9,8 +9,8 @@ machine and nothing costs money.
 
 ```
 Round 7/20  (secret 3516)
-  A llama3.2:3b        1234(1/1) 1356(2/2) 3516(4/0)  cracked in 3, 1.4s
-  B qwen2.5:3b         1221(1/0) 2321(1/1) 1331(2/0) 4331(1/0) 1431(1/1) 2431(1/1) 1241(1/0) 3241(1/2) 1341(1/0) 2341(1/1)  failed, best 2/0, 2.5s
+  A llama3.1:8b        1234(1/1) 1356(2/2) 3516(4/0)  cracked in 3, 1.4s
+  B qwen2.5:7b         1221(1/0) 2321(1/1) 1331(2/0) 4331(1/0) 1431(1/1) 2431(1/1) 1241(1/0) 3241(1/2) 1341(1/0) 2341(1/1)  failed, best 2/0, 2.5s
   -> A wins   [A 4 - 3 B]
 ```
 
@@ -28,7 +28,8 @@ make fight
 ```
 
 First run: writes `.env` with generated keys, starts Otari, pulls the two default
-models (about 2 GB each), switches them on in Otari, plays 20 rounds. Later runs skip the
+models (about 5 GB each, they need 16 GB of RAM together), switches them on in Otari, plays
+20 rounds. On an 8 GB machine set the 3B pair in `.env` first (table below). Later runs skip the
 slow parts. A quick two-round check:
 
 ```bash
@@ -67,9 +68,13 @@ memory at once, so pick a pair that fits your RAM.
 
 | RAM | Pair that fits |
 |---|---|
-| 8 GB | `llama3.2:1b` vs `qwen2.5:1.5b` |
-| 16 GB (default) | `llama3.2:3b` vs `qwen2.5:3b` |
-| 32 GB or a real GPU | `llama3.1:8b` vs `qwen2.5:7b` |
+| 8 GB | `llama3.2:3b` vs `qwen2.5:3b` |
+| 16 GB (default) | `llama3.1:8b` vs `qwen2.5:7b` |
+| 32 GB or a real GPU | `llama3.1:70b`-class or `qwen2.5:32b` vs anything |
+
+Honest warning from the reference machine: with the plain prompt, 3B models never crack a
+4-digit code and 7B models rarely do. That is the point. The fight card still ranks them on
+how close they got, and the first good edit to `strategy.md` is where the cracks start.
 
 Thinking models (`qwen3`, `deepseek-r1`) tend to burn the 60 second limit reasoning
 about digits. Try them, but that is your experiment, not the default.

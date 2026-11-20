@@ -67,8 +67,8 @@ class Settings:
 
         seed_raw = get("SEED")
         return cls(
-            fighter_a=get("FIGHTER_A", "llama3.2:3b"),
-            fighter_b=get("FIGHTER_B", "qwen2.5:3b"),
+            fighter_a=get("FIGHTER_A", "llama3.1:8b"),
+            fighter_b=get("FIGHTER_B", "qwen2.5:7b"),
             master_key=get("OTARI_MASTER_KEY"),
             key_a=get("FIGHTER_A_KEY"),
             key_b=get("FIGHTER_B_KEY"),
