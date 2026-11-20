@@ -21,7 +21,9 @@ class ChatResult:
 
 
 class OtariError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int = 0):
+        super().__init__(message)
+        self.status = status
 
 
 class Otari:
@@ -100,8 +102,11 @@ class Otari:
         """Store otari.ai as a hosted provider named 'otari-ai' so a team can point a stage at
         `otari-ai:<vendor>/<model>`. Returns a one-line note."""
         h = self._admin()
-        r = self.http.get(f"{self.base_url}/api/v1/hosted-providers", headers=h)
-        r.raise_for_status()
+        try:
+            r = self.http.get(f"{self.base_url}/api/v1/hosted-providers", headers=h)
+            r.raise_for_status()
+        except httpx.HTTPError as e:
+            raise OtariError(f"listing hosted providers failed: {e}") from e
         existing = next((p for p in r.json().get("data", []) if p["name"] == "otari-ai"), None)
         body = {"name": "otari-ai", "provider": "otari", "api_key": api_key}
         if existing is None:
@@ -133,7 +138,7 @@ class Otari:
         seconds = time.perf_counter() - t0
         if r.status_code >= 400:
             detail = r.text[:300]
-            raise OtariError(f"HTTP {r.status_code} from Otari for '{alias}': {detail}")
+            raise OtariError(f"HTTP {r.status_code} from Otari for '{alias}': {detail}", r.status_code)
         data = r.json()
         msg = data["choices"][0]["message"]
         content = msg.get("content") or ""
@@ -149,11 +154,14 @@ class Otari:
         )
 
     def key_usage(self, api_key: str, start_iso: str) -> dict:
-        """What Otari logged for one fighter key since the fight began."""
-        r = self.http.get(
-            f"{self.base_url}/api/v1/key/usage/summary",
-            headers={"Authorization": f"Bearer {api_key}"},
-            params={"start_date": start_iso, "dimensions": "model"},
-        )
-        r.raise_for_status()
-        return r.json()
+        """What Otari logged for one team key since the run began. Empty dict if the gateway cannot say."""
+        try:
+            r = self.http.get(
+                f"{self.base_url}/api/v1/key/usage/summary",
+                headers={"Authorization": f"Bearer {api_key}"},
+                params={"start_date": start_iso, "dimensions": "model"},
+            )
+            r.raise_for_status()
+            return r.json()
+        except (httpx.HTTPError, ValueError):
+            return {}

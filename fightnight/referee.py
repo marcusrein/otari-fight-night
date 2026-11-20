@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import random
@@ -66,7 +67,20 @@ def chat_via(otari: Otari, api_key: str, timeout: float) -> Callable[[str, list[
     return chat
 
 
-def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict], chat, log, sizes: dict[str, float], usage_fn=None, label: str = "") -> TeamResult:
+def model_weights(team: Team, sizes: dict[str, float]) -> float:
+    """GB of local model weights a team loads, from Ollama's listing. Hosted models weigh nothing here."""
+    total = 0.0
+    for m in team.models():
+        head, _, rest = m.partition(":")
+        if head == "ollama":
+            m = rest
+        elif head in ("otari-ai",):
+            continue
+        total += sizes.get(m, 0.0)
+    return round(total, 2)
+
+
+def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict], chat, log, sizes: dict[str, float], usage_fn=None, label: str = "") -> tuple[TeamResult, list[dict]]:
     calls: list[Call] = []
     t0 = datetime.now(timezone.utc)
 
@@ -91,7 +105,7 @@ def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict
         seconds=round(sum(c.seconds for c in calls), 1),
         requests=len(calls),
         local_share=local_share(calls),
-        weights_gb=round(sum(sizes.get(m, 0.0) for m in team.models()), 2),
+        weights_gb=model_weights(team, sizes),
         usage=usage,
     ), cleaned
 
@@ -116,14 +130,30 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
 
 
 def clean_file(team: Team, path: Path, sample: list[dict], chat, on_call) -> Path:
-    """Run a team on any CSV. Rows get an id for the pipeline and lose it again on the way out."""
+    """Run a team on any CSV. Rows get an id for the pipeline and lose it again on the way out.
+
+    Ids are what lets plain code honor a model's drop, so they are assigned with care: exact
+    duplicate rows share one id (so one copy may go), and rows that are a repeated header or
+    have no data at all get no id (so they may go as junk). Everything else is a real row.
+    """
     rows = read_csv(path)
-    columns = list(rows[0].keys()) if rows else []
+    with path.open(newline="") as f:
+        header = next(csv.reader(f), [])
+    columns = header
     had_id = "id" in columns
-    for i, r in enumerate(rows):
-        if not had_id:
-            r["id"] = f"R{i + 1:05d}"
-    cleaned, _ = run_team(team, rows, sample, chat, on_call)
+    if not had_id:
+        seen: dict[tuple, str] = {}
+        n = 0
+        for r in rows:
+            cells = tuple(str(r.get(c, "")).strip() for c in columns)
+            if not any(cells) or cells == tuple(columns):
+                r["id"] = ""
+                continue
+            if cells not in seen:
+                n += 1
+                seen[cells] = f"R{n:05d}"
+            r["id"] = seen[cells]
+    cleaned, _ = run_team(team, rows, sample, chat, on_call) if rows else ([], [])
     out = path.with_name(path.stem + ".clean.csv")
     write_csv(out, cleaned, columns if had_id else [c for c in columns if c != "id"])
     return out

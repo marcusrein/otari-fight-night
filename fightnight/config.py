@@ -41,6 +41,18 @@ def init_env(example: Path = EXAMPLE_PATH, target: Path = ENV_PATH) -> bool:
     return True
 
 
+class ConfigError(ValueError):
+    pass
+
+
+def _int(env: dict, name: str, default: str) -> int:
+    raw = env.get(name, default) or default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a whole number, got {raw!r} (check .env or your shell)") from None
+
+
 @dataclass
 class Settings:
     master_key: str
@@ -63,6 +75,11 @@ class Settings:
         def get(name: str, default: str = "") -> str:
             return env.get(name, default) or default
 
+        from .corrupt import PRESETS
+
+        preset = get("PRESET", "medium")
+        if preset not in PRESETS:
+            raise ConfigError(f"PRESET must be one of {', '.join(PRESETS)}, got {preset!r}")
         seed_raw = get("SEED")
         return cls(
             master_key=get("OTARI_MASTER_KEY"),
@@ -73,8 +90,8 @@ class Settings:
             ollama_url=get("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
             team_path=Path(get("TEAM", "team.yml")),
             stock_path=Path(get("STOCK", "teams/stock.yml")),
-            rows=int(get("ROWS", "50")),
-            preset=get("PRESET", "medium"),
-            seed=int(seed_raw) if seed_raw else None,
-            timeout_seconds=float(get("TIMEOUT_SECONDS", "120")),
+            rows=_int(env, "ROWS", "50"),
+            preset=preset,
+            seed=_int(env, "SEED", "0") if seed_raw else None,
+            timeout_seconds=float(_int(env, "TIMEOUT_SECONDS", "120")),
         )

@@ -9,19 +9,22 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
+import httpx
+
 from .corrupt import COLUMNS
-from .otari import ChatResult
+from .otari import ChatResult, OtariError
 from .team import Stage, Team
 
 PROVIDERS = {"ollama", "otari-ai"}
 PRIVATE_KEYS = {"drop", "flag", "_pos"}
 MAX_TOKENS_PER_ROW = 120
 _ARRAY = re.compile(r"\[\s*\{.*?\}\s*\]", re.S)
+_OBJECT = re.compile(r"\{.*\}", re.S)
+RETRYABLE = {408, 429, 500, 502, 503, 504}
 
 ChatFn = Callable[[str, list[dict], int], ChatResult]
 
@@ -37,6 +40,7 @@ class Call:
     prompt_tokens: int
     completion_tokens: int
     unparsed: int
+    error: str = ""  # transport or gateway failure; the rows were kept as they were
 
 
 @dataclass
@@ -50,7 +54,8 @@ class StageStats:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     local_requests: int = 0
-    refused_drops: int = 0  # rows a model wanted to delete that plain code kept
+    refused_drops: int = 0  # real rows a model wanted to delete that plain code kept
+    failed_requests: int = 0  # timeouts and gateway errors; their rows count as unparsed
 
 
 def qualify_model(model: str) -> str:
@@ -60,8 +65,16 @@ def qualify_model(model: str) -> str:
 
 
 def parse_rows(text: str) -> list[dict] | None:
-    """The last JSON array of objects in a reply, fences and prose allowed."""
+    """The last JSON array of objects in a reply, fences and prose allowed. A lone object counts as one row."""
     candidates = _ARRAY.findall(text or "")
+    if not candidates:
+        m = _OBJECT.search(text or "")
+        if m:
+            try:
+                data = json.loads(m.group())
+                return [data] if isinstance(data, dict) else None
+            except json.JSONDecodeError:
+                return None
     for raw in reversed(candidates):
         try:
             data = json.loads(raw)
@@ -100,6 +113,14 @@ class Runner:
         self.on_call = on_call
         self.stats: dict[str, StageStats] = {}
         self._prompts: dict[str, str] = {}
+        self.remaining: Counter = Counter()  # copies of each id still present, across route slices
+
+    def stat(self, stage: Stage) -> StageStats:
+        return self.stats.setdefault(stage.name, StageStats(stage.name, ", ".join(stage.all_models())))
+
+    def begin_stage(self, rows: list[dict]) -> None:
+        self.remaining = Counter(str(r.get("id", "")).strip() for r in rows)
+        self._initial = Counter(self.remaining)
 
     def prompt(self, stage: Stage) -> str:
         key = str(stage.prompt)
@@ -107,16 +128,35 @@ class Runner:
             self._prompts[key] = stage.prompt.read_text().replace("{sample}", self.sample_text).strip()
         return self._prompts[key]
 
-    def ask(self, stage: Stage, model: str, system: str, rows: list[dict], extra: str = "") -> tuple[list[dict], int]:
-        """One request. Returns (rows after the model, unparsed count). Rows keep their order and count."""
+    def ask(self, stage: Stage, model: str, system: str, rows: list[dict], extra: str = "") -> tuple[list[dict], list[bool]]:
+        """One request. Returns (rows after the model, applied flag per row). Rows keep their order and count.
+        A timeout or a gateway failure keeps every row as it was and counts the request as failed."""
         public = [_public(r) for r in rows]
         user = "Rows:\n" + json.dumps(public, ensure_ascii=False) + "\n\nReturn the corrected rows as a JSON array of objects with the same keys" + (extra or "") + "."
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         qualified = qualify_model(model)
-        res = self.chat(qualified, messages, MAX_TOKENS_PER_ROW * len(rows) + 200)
+        st = self.stat(stage)
+        error = ""
+        try:
+            res = self.chat(qualified, messages, MAX_TOKENS_PER_ROW * len(rows) + 200)
+        except httpx.HTTPError as e:
+            error = f"{type(e).__name__}: {e}"[:200]
+            res = None
+        except OtariError as e:
+            if getattr(e, "status", 0) not in RETRYABLE:
+                raise
+            error = str(e)[:200]
+            res = None
+        if res is None:
+            applied = [False] * len(rows)
+            st.requests += 1
+            st.failed_requests += 1
+            st.unparsed += len(rows)
+            self.on_call(Call(stage.name, model, qualified.split(":", 1)[0], len(rows), 0, 0.0, 0, 0, len(rows), error))
+            return rows, applied
         parsed = parse_rows(res.content)
-        merged, unparsed = _merge(rows, parsed)
-        st = self.stats.setdefault(stage.name, StageStats(stage.name, ", ".join(stage.all_models())))
+        merged, applied = _merge(rows, parsed)
+        unparsed = applied.count(False)
         st.requests += 1
         st.seconds += res.seconds
         st.unparsed += unparsed
@@ -125,7 +165,7 @@ class Runner:
         provider = res.provider or qualified.split(":", 1)[0]
         st.local_requests += 1 if provider == "ollama" else 0
         self.on_call(Call(stage.name, model, provider, len(rows), len(parsed) if parsed else 0, res.seconds, res.prompt_tokens, res.completion_tokens, unparsed))
-        return merged, unparsed
+        return merged, applied
 
     def run_stage(self, stage: Stage, rows: list[dict]) -> list[dict]:
         if stage.type == "map":
@@ -144,26 +184,33 @@ class Runner:
 
     def _apply_drops(self, stage: Stage, rows: list[dict]) -> list[dict]:
         """Honor "drop": true only where plain code agrees: an empty id (junk) or an id another
-        row shares (duplicate). The first occurrence of a duplicated id is always kept."""
+        copy of which is still present (duplicate). The last remaining copy is always kept, across
+        route slices too. A drop of a real row is refused and counted."""
         ids = [str(r.get("id", "")).strip() for r in rows]
-        counts = Counter(ids)
         flagged = [_truthy(r.get("drop")) for r in rows]
-        refused = 0
-        for rid, n in counts.items():
-            if rid and n > 1:
+        here = Counter(ids)
+        for rid, n in here.items():
+            if rid and n > 1 and self.remaining[rid] == n:
                 idx = [i for i, x in enumerate(ids) if x == rid]
                 if all(flagged[i] for i in idx):
-                    flagged[idx[0]] = False  # never delete every copy
-                    refused += 1
+                    flagged[idx[0]] = False  # all copies are in this slice and all flagged: keep the first
         kept: list[dict] = []
+        refused = 0
         for r, rid, drop in zip(rows, ids, flagged):
-            if drop and (rid == "" or counts[rid] > 1):
-                continue
             if drop:
-                refused += 1
+                if rid == "":
+                    continue
+                if self.remaining[rid] > 1:
+                    self.remaining[rid] -= 1
+                    continue
+                if here[rid] == 1 and self.remaining[rid] == 1 and sum(1 for x in ids if x == rid) == 1 and self._was_unique(rid):
+                    refused += 1
             kept.append(_strip(r, {"drop"}))
-        self.stats[stage.name].refused_drops += refused
+        self.stat(stage).refused_drops += refused
         return kept
+
+    def _was_unique(self, rid: str) -> bool:
+        return self._initial.get(rid, 0) == 1
 
     def _map(self, stage: Stage, rows: list[dict]) -> list[dict]:
         out: list[dict] = []
@@ -171,25 +218,29 @@ class Runner:
         for batch in self._batches(stage, rows):
             merged, _ = self.ask(stage, stage.model, system, batch, '. A junk row or a duplicate that should be removed gets "drop": true')
             out.extend(merged)
-        self.stats[stage.name].rows += len(rows)
+        self.stat(stage).rows += len(rows)
         return self._apply_drops(stage, out)
 
     def _vote(self, stage: Stage, rows: list[dict]) -> list[dict]:
+        """Each voter sees the same original rows and may change only the vote column.
+        Majority wins; ties go to the first voter that answered; a voter whose reply could not
+        be read abstains for those rows."""
         system = self.prompt(stage)
         out: list[dict] = []
         for batch in self._batches(stage, rows):
-            answers = []
+            ballots: list[list[str | None]] = []
             for model in stage.models:
-                merged, _ = self.ask(stage, model, system, batch, f', changing only "{stage.column}"')
-                answers.append([str(r.get(stage.column, "")) for r in merged])
+                copies = [dict(r) for r in batch]
+                answered, applied = self.ask(stage, model, system, copies, f', changing only "{stage.column}"')
+                ballots.append([str(r.get(stage.column, "")) if ok else None for r, ok in zip(answered, applied)])
             for i, row in enumerate(batch):
-                votes = [a[i] for a in answers]
-                counts = Counter(votes)
-                top = max(counts.values())
-                winner = next(v for v in votes if counts[v] == top)  # first model breaks ties
-                row[stage.column] = winner
+                votes = [b[i] for b in ballots if b[i] is not None]
+                if votes:
+                    counts = Counter(votes)
+                    top = max(counts.values())
+                    row[stage.column] = next(v for v in votes if counts[v] == top)
                 out.append(row)
-        self.stats.setdefault(stage.name, StageStats(stage.name, ", ".join(stage.models))).rows += len(rows)
+        self.stat(stage).rows += len(rows)
         return out
 
     def _verify(self, stage: Stage, rows: list[dict]) -> list[dict]:
@@ -207,7 +258,7 @@ class Runner:
                 r.pop("flag", None)
             for batch in self._batches(stage, flagged):
                 self.ask(stage, stage.model, system, batch, extra)  # mutates the row objects in place
-        self.stats[stage.name].rows += len(rows)
+        self.stat(stage).rows += len(rows)
         return [_strip(r, {"flag"}) for r in self._apply_drops(stage, out)]
 
     def _route(self, stage: Stage, rows: list[dict]) -> list[dict]:
@@ -233,28 +284,35 @@ def _strip(row: dict, keys: set[str]) -> dict:
     return {k: v for k, v in row.items() if k not in keys}
 
 
-def _merge(rows: list[dict], parsed: list[dict] | None) -> tuple[list[dict], int]:
-    """Apply a model's answer to the rows it was sent.
+def _merge(rows: list[dict], parsed: list[dict] | None) -> tuple[list[dict], list[bool]]:
+    """Apply a model's answer to the rows it was sent. Returns the rows and an applied flag per row.
 
-    Same count: match by position (small models mangle ids more often than they reorder).
-    Otherwise match by id; rows with no answer stay as they were and count as unparsed.
-    Returned rows keep the original object's identity so callers can track them.
+    When the reply carries exactly the ids it was sent, match by id (models do reorder).
+    Otherwise, same count: match by position (small models mangle ids more often than they
+    reorder). Otherwise match by id where possible; rows with no answer stay as they were.
     """
     if not parsed:
-        return rows, len(rows)
+        return rows, [False] * len(rows)
+    sent_ids = [str(r.get("id", "")).strip() for r in rows]
+    got_ids = [str(a.get("id", "")).strip() for a in parsed]
+    by_id = {gid: a for gid, a in zip(got_ids, parsed) if gid}
+    if sorted(got_ids) == sorted(sent_ids) and all(sent_ids) and len(set(sent_ids)) == len(sent_ids):
+        for row, rid in zip(rows, sent_ids):
+            _apply(row, by_id[rid])
+        return rows, [True] * len(rows)
     if len(parsed) == len(rows):
         for row, ans in zip(rows, parsed):
             _apply(row, ans)
-        return rows, 0
-    by_id = {str(a.get("id", "")).strip(): a for a in parsed if str(a.get("id", "")).strip()}
-    unparsed = 0
-    for row in rows:
-        ans = by_id.get(str(row.get("id", "")).strip())
+        return rows, [True] * len(rows)
+    applied = []
+    for row, rid in zip(rows, sent_ids):
+        ans = by_id.get(rid) if rid else None
         if ans is None:
-            unparsed += 1
+            applied.append(False)
         else:
             _apply(row, ans)
-    return rows, unparsed
+            applied.append(True)
+    return rows, applied
 
 
 def _apply(row: dict, ans: dict) -> None:
@@ -271,7 +329,11 @@ def run_team(team: Team, rows: list[dict], sample: list[dict], chat: ChatFn, on_
     for stage in team.stages:
         if stage.name in owned:
             continue
+        runner.begin_stage(current)
         current = runner.run_stage(stage, current)
+    for stage in team.stages:
+        if stage.type != "route":
+            runner.stat(stage)  # every model stage shows up in the card, even with zero requests
     order = [s.name for s in team.stages]
     stats = sorted(runner.stats.values(), key=lambda s: order.index(s.name))
     return [_strip(r, PRIVATE_KEYS) for r in current], stats

@@ -208,7 +208,7 @@ def test_drop_is_only_honored_for_junk_or_duplicates(tmp_path):
     out, stats = run_team(team, rows, SAMPLE, FakeChat(answer), lambda c: None)
     ids = [r["id"] for r in out]
     assert ids == ["T0001", "T0002", "T0003", "T0004"], "junk and one duplicate removed, real rows kept"
-    assert stats[0].refused_drops == 4
+    assert stats[0].refused_drops == 3, "only real rows count as refused; the kept duplicate copy does not"
 
 
 def test_verify_drop_guard_applies_too(tmp_path):
@@ -219,3 +219,108 @@ def test_verify_drop_guard_applies_too(tmp_path):
 
     out, _ = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
     assert len(out) == 10
+
+
+def test_vote_voters_are_independent_and_only_touch_the_column(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: v, type: vote, models: [a, b, c], column: category, prompt: prompts/p.md}\n")
+
+    def answer(model, rows):
+        m = model.split(":")[-1]
+        if m == "a":
+            return json.dumps([{**r, "category": "rent", "vendor": "A-wrote-this"} for r in rows])
+        if m == "b":
+            return "I cannot help with that"  # unparsed: must not inherit a's answer as a vote
+        return json.dumps([{**r, "category": r["category"]} for r in rows])  # c echoes what it was sent
+
+    out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
+    # c saw the original rows (dining), not a's rewrite; b abstained; so dining 1 vs rent 1, first valid voter (a) wins ties
+    assert all(r["vendor"] == "V" for r in out), "non-vote columns are never changed by voters"
+    assert all(r["category"] == "rent" for r in out)
+
+
+def test_vote_abstentions_do_not_count(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: v, type: vote, models: [a, b, c], column: category, prompt: prompts/p.md}\n")
+
+    def answer(model, rows):
+        m = model.split(":")[-1]
+        if m == "a":
+            return json.dumps([{**r, "category": "rent"} for r in rows])
+        return json.dumps([{**r, "category": "groceries"} for r in rows])
+
+    out, _ = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
+    assert all(r["category"] == "groceries" for r in out)
+
+
+def test_duplicates_split_across_route_slices_are_still_deduped(tmp_path):
+    team = team_from(tmp_path, """
+stages:
+  - {name: triage, type: map, model: t, batch: 20, prompt: prompts/p.md}
+  - {name: route, type: route, by: tag, to: {x: fixx, "*": other}}
+  - {name: fixx, type: map, model: o, batch: 20, prompt: prompts/p.md}
+  - {name: other, type: map, model: e, batch: 20, prompt: prompts/p.md}
+""")
+    rows = [dict(r) for r in ROWS[:4]] + [dict(ROWS[0])]  # T0001 twice
+
+    def answer(model, rows):
+        if model.endswith(":t"):
+            # the two copies of T0001 get different tags
+            return json.dumps([{**r, "tag": "x" if i == 0 else "y"} for i, r in enumerate(rows)])
+        return json.dumps([{**r, "drop": r["id"] == "T0001"} for r in rows])  # both slices flag their copy
+
+    out, stats = run_team(team, rows, SAMPLE, FakeChat(answer), lambda c: None)
+    assert sorted(r["id"] for r in out) == ["T0001", "T0002", "T0003", "T0004"], "exactly one copy of T0001 survives"
+    assert sum(s.refused_drops for s in stats) == 0
+
+
+def test_reordered_reply_with_intact_ids_matches_by_id(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+
+    def answer(model, rows):
+        return json.dumps([{**r, "vendor": "fixed-" + r["id"]} for r in reversed(rows)])
+
+    out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
+    assert [r["vendor"] for r in out] == ["fixed-" + r["id"] for r in ROWS]
+    assert stats[0].unparsed == 0
+
+
+def test_transport_error_keeps_rows_and_counts_failed_request(tmp_path):
+    import httpx
+
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 5, prompt: prompts/p.md}\n")
+    n = [0]
+
+    def chat(model, messages, max_tokens):
+        n[0] += 1
+        if n[0] == 1:
+            raise httpx.ReadTimeout("slow")
+        return ChatResult(json.dumps(json.loads(messages[-1]["content"].split("Rows:\n", 1)[1].split("\n\nReturn", 1)[0])), 1, 1, 0.1, None, "ollama", model)
+
+    calls = []
+    out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, chat, calls.append)
+    assert len(out) == 10
+    assert stats[0].unparsed == 5 and stats[0].failed_requests == 1 and stats[0].requests == 2
+    assert calls[0].error.startswith("ReadTimeout")
+
+
+def test_empty_input_runs_without_error(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 5, prompt: prompts/p.md}\n  - {name: v, type: verify, model: a, batch: 5, prompt: prompts/p.md}\n")
+    out, stats = run_team(team, [], SAMPLE, FakeChat(echo), lambda c: None)
+    assert out == [] and [s.requests for s in stats] == [0, 0]
+
+
+def test_parse_single_object_reply():
+    assert parse_rows('{"id": "a", "x": "1"}') == [{"id": "a", "x": "1"}]
+
+
+def test_route_target_that_is_a_route_is_rejected(tmp_path):
+    import pytest
+
+    from fightnight.team import TeamError
+
+    with pytest.raises(TeamError, match="route"):
+        team_from(tmp_path, """
+stages:
+  - {name: r1, type: route, by: tag, to: {"*": r2}}
+  - {name: r2, type: route, by: tag, to: {"*": m}}
+  - {name: m, type: map, model: a, batch: 5, prompt: prompts/p.md}
+""")

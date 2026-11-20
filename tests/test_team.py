@@ -97,3 +97,18 @@ def test_sha_changes_with_content(tmp_path):
     a = load_team(write(tmp_path, EXAMPLE)).sha256
     b = load_team(write(tmp_path, EXAMPLE.replace("batch: 20", "batch: 10"))).sha256
     assert a != b
+
+
+def test_bad_batch_and_string_models_name_the_stage(tmp_path):
+    f = write(tmp_path, "name: x\nstages:\n  - name: a\n    type: map\n    model: m\n    batch: abc\n    prompt: prompts/clean.md\n")
+    with pytest.raises(TeamError, match="a.*batch"):
+        load_team(f)
+    f = write(tmp_path, "name: x\nstages:\n  - name: v\n    type: vote\n    models: qwen2.5:3b\n    column: category\n    prompt: prompts/category.md\n")
+    with pytest.raises(TeamError, match="v.*models.*list"):
+        load_team(f)
+
+
+def test_unknown_keys_are_rejected(tmp_path):
+    f = write(tmp_path, "name: x\nstages:\n  - name: a\n    type: map\n    modle: m\n    model: m\n    prompt: prompts/clean.md\n")
+    with pytest.raises(TeamError, match="a.*modle"):
+        load_team(f)

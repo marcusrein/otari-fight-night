@@ -7,8 +7,10 @@ fight: .env up
 	uv run fight.py
 
 # Run your team on any CSV: make clean FILE=path/to/your.csv -> path/to/your.clean.csv
-clean: .env up
-	uv run fight.py clean $(FILE)
+clean: .env
+	@test -n "$(FILE)" || (echo "usage: make clean FILE=path/to/your.csv" && exit 1)
+	$(MAKE) up
+	uv run fight.py clean "$(FILE)"
 
 gen: .env
 	uv run fight.py gen

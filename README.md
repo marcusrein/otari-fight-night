@@ -49,9 +49,10 @@ uv run fight.py
 
 ## What you get
 
-- `fight-card.md`: machine specs, stock vs yours (accuracy, delta, duplicates kept, rows dropped,
-  junk kept, seconds, requests, model weights loaded, accuracy per GB, share of rows processed
-  locally), Otari's own per-key usage, and a stage-by-stage table for your team. This is what you
+- `fight-card.md`: machine specs, stock vs yours (net repair, delta, problems fixed, clean cells
+  broken, duplicates kept, rows dropped, junk kept, seconds, requests, model weights loaded,
+  repair per GB, share of requests served locally), Otari's own per-key usage, and a
+  stage-by-stage table for your team. This is what you
   submit.
 - `fight-card.json`: the same data for the community "what runs on what" table.
 - `fight-log.jsonl`: every request (stage, model, provider, rows in and out, seconds, tokens).
@@ -127,19 +128,23 @@ make clean FILE=~/Downloads/bank-export.csv
 ```
 
 Runs your team on any CSV and writes `bank-export.clean.csv` beside it. No grading, no golden
-file. This is the tool you keep after the fight. Prompts that know about dates, vendors and
+file. This is the tool you keep after the fight. Without an id column the referee assigns ids on
+the way in, so models may remove exact duplicate rows, repeated header rows and empty rows, and
+nothing else: a row with data in it is never deleted on a model's say-so. Prompts that know about dates, vendors and
 categories will need editing for other shapes of data, which is the point.
 
 ## Rules and scoring
 
 The messy file is generated from a seed: 50 synthetic transaction rows by default (`ROWS=` for more) (id, date, vendor, amount,
-category, note) with five date formats, random casing and spacing, currency symbols, category
+category, note) with seven date formats, random casing and spacing, currency symbols, category
 synonyms, exact and near duplicates, blanks, curly quotes, swapped columns, and junk rows
 (repeated headers, a TOTAL row, dashes). `PRESET=easy|medium|brutal` sets the rates.
 
-Score is cell accuracy against the golden file, by id. A duplicate kept scores that id at zero. A
-real row dropped scores zero. A junk row kept costs a full row. One number, plus per-column accuracy
-so you can see where a team fails.
+Score is net repair: of the problems in the messy file (every cell that differs from the golden
+file, each extra duplicate copy, each junk row), how many the team fixed, minus clean cells it
+broke, as a percentage of the problems. Comparison is exact, so `03/14/2026` is not credit for
+`2026-03-14`. Doing nothing scores 0. Wrecking clean data goes negative. A real row dropped
+counts as five broken cells. The card also shows per-column repair rates for both teams.
 
 The headline is the delta: your team minus the stock team, same file, same machine. Raw scores are
 not comparable across machines, and the card does not pretend they are. `SEED=12345 make fight`
@@ -151,9 +156,9 @@ Out of 100, scored from the card, the team file, the log and your write-up:
 
 | Criterion | Points | What judges look for |
 |---|---|---|
-| Beat the stock team | 30 | The delta on your machine, and whether it holds on a second seed |
+| Beat the stock team | 30 | The net-repair delta on your machine, and whether it holds on a second seed |
 | Architecture story | 25 | Why this split. The log should show the stages mattered |
-| Pound for pound | 20 | Accuracy per GB of model weights, and seconds |
+| Pound for pound | 20 | Net repair per GB of local model weights, and seconds |
 | Show and tell | 15 | A write-up, post or 60-second video worth sharing |
 | Friction log | 10 | Three specific things that slowed you down |
 
@@ -164,7 +169,7 @@ the host machine for the bracket, so a bracket team has to fit in 16 GB.
 
 - **Frontier through the same gateway.** With an [otari.ai](https://otari.ai) key in `.env` as
   `OTARI_AI_KEY`, any stage can use `model: otari-ai:openai/gpt-oss-120b`. Same team file, same
-  referee, same dashboard. Those requests cost money, and the card's "rows processed locally"
+  referee, same dashboard. Those requests cost money, and the card's "requests served locally"
   drops below 100%, which judges will notice. Hosted reasoning models spend the per-request token
   budget thinking, so check the "broken rows" column before you trust a hosted stage. The interesting version is a stage that touches
   no rows at all: a coach that reads the scores and rewrites a prompt. Not built yet; that is
@@ -194,7 +199,9 @@ fight.py ──► Otari (Docker, :8000) ──► Ollama (host, :11434)
 - `fightnight/otari.py` is the only code that talks to Otari: chat through the team keys, and
   an admin step before a fight that switches the models on under the provider, because a hosted
   provider declared in config starts with an empty roster. Every response's `otari-provider`
-  header is what the local share is computed from.
+  header is what the "requests served locally" share is computed from. A timeout or gateway
+  error on one request keeps those rows as they were and counts the request as failed; a
+  424 or 401 (misconfiguration) stops the fight with the message.
 - `fightnight/card.py` builds the card, pulling per-key usage from
   `GET /api/v1/key/usage/summary`.
 
