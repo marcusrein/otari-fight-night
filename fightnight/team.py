@@ -1,0 +1,106 @@
+"""team.yml: the one file an entrant edits. Roles, models, batch sizes, prompts, and how rows flow."""
+
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
+
+STAGE_TYPES = ("map", "route", "vote", "verify")
+
+
+class TeamError(ValueError):
+    pass
+
+
+@dataclass
+class Stage:
+    name: str
+    type: str
+    model: str | None = None
+    models: list[str] = field(default_factory=list)
+    batch: int = 10
+    prompt: Path | None = None
+    by: str | None = None
+    to: dict[str, str] = field(default_factory=dict)
+    column: str | None = None
+    retry: int = 0
+
+    def all_models(self) -> list[str]:
+        return [self.model] if self.model else list(self.models)
+
+
+@dataclass
+class Team:
+    name: str
+    stages: list[Stage]
+    path: Path
+    sha256: str
+
+    def models(self) -> list[str]:
+        seen: list[str] = []
+        for s in self.stages:
+            for m in s.all_models():
+                if m not in seen:
+                    seen.append(m)
+        return seen
+
+    def stage(self, name: str) -> Stage:
+        return next(s for s in self.stages if s.name == name)
+
+
+def _need(stage_name: str, raw: dict, key: str):
+    if key not in raw or raw[key] in (None, "", []):
+        raise TeamError(f"stage '{stage_name}' needs '{key}'")
+    return raw[key]
+
+
+def load_team(path: Path) -> Team:
+    path = Path(path)
+    text = path.read_text()
+    try:
+        doc = yaml.safe_load(text) or {}
+    except yaml.YAMLError as e:
+        raise TeamError(f"{path}: not valid YAML: {e}") from e
+    if not isinstance(doc, dict) or not isinstance(doc.get("stages"), list) or not doc["stages"]:
+        raise TeamError(f"{path}: needs a 'stages' list")
+    base = path.parent
+    stages: list[Stage] = []
+    for raw in doc["stages"]:
+        if not isinstance(raw, dict):
+            raise TeamError(f"{path}: every stage must be a mapping")
+        name = str(raw.get("name") or f"stage{len(stages) + 1}")
+        if any(s.name == name for s in stages):
+            raise TeamError(f"stage '{name}' is defined twice")
+        kind = str(raw.get("type", ""))
+        if kind not in STAGE_TYPES:
+            raise TeamError(f"stage '{name}' has unknown type '{kind}'; use one of {', '.join(STAGE_TYPES)}")
+        st = Stage(name=name, type=kind, batch=int(raw.get("batch", 10)), retry=int(raw.get("retry", 0)))
+        if kind in ("map", "verify"):
+            st.model = str(_need(name, raw, "model"))
+        if kind == "vote":
+            st.models = [str(m) for m in _need(name, raw, "models")]
+            st.column = str(_need(name, raw, "column"))
+        if kind in ("map", "vote", "verify"):
+            prompt = base / str(_need(name, raw, "prompt"))
+            if not prompt.exists():
+                raise TeamError(f"stage '{name}': prompt file {prompt.name} not found at {prompt}")
+            st.prompt = prompt
+        if kind == "route":
+            st.by = str(_need(name, raw, "by"))
+            to = _need(name, raw, "to")
+            if not isinstance(to, dict):
+                raise TeamError(f"stage '{name}': 'to' must map values to stage names")
+            st.to = {str(k): str(v) for k, v in to.items()}
+        if st.batch < 1:
+            raise TeamError(f"stage '{name}': batch must be at least 1")
+        stages.append(st)
+    names = {s.name for s in stages}
+    for s in stages:
+        if s.type == "route":
+            for value, target in s.to.items():
+                if target not in names:
+                    raise TeamError(f"stage '{s.name}' routes '{value}' to '{target}', which is not a stage")
+    return Team(name=str(doc.get("name") or path.stem), stages=stages, path=path, sha256=hashlib.sha256(text.encode()).hexdigest()[:12])
