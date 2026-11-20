@@ -1,50 +1,48 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 from fightnight.card import build, render_md
-from fightnight.referee import Fighter, Guess, Play, Round
+from fightnight.grade import Grade
+from fightnight.pipeline import StageStats
+from fightnight.referee import FightResult, TeamResult
+from fightnight.team import Stage, Team
 
 
-def _play(corner, model, cracked, score, seconds, malformed=0):
-    guesses = [Guess(i + 1, "1234", [1, 2, 3, 4], 1, 0, seconds / max(score, 1), 10, 2) for i in range(min(score, 10))]
-    for i in range(malformed):
-        guesses[i].malformed = True
-        guesses[i].guess = None
-    return Play(corner, model, cracked, score, seconds, guesses)
+def _team(name, model):
+    return Team(name=name, stages=[Stage(name="clean", type="map", model=model, prompt=Path("p.md"))], path=Path(f"{name}.yml"), sha256="abc123def456")
 
 
-def _card(cracked_a=True):
-    a = Fighter("A", "fighter-a", "model-a", "k")
-    b = Fighter("B", "fighter-b", "model-b", "k")
-    rounds = [
-        Round(1, [1, 2, 3, 4], _play("A", "model-a", cracked_a, 3 if cracked_a else 11, 4.0), _play("B", "model-b", False, 11, 9.0, malformed=1), "a"),
-        Round(2, [6, 6, 1, 2], _play("A", "model-a", cracked_a, 5 if cracked_a else 11, 7.0), _play("B", "model-b", False, 11, 3.0), "a" if cracked_a else "b"),
-    ]
-    usage = {"totals": {"request_count": 20, "error_count": 0, "prompt_tokens": 100, "completion_tokens": 20, "avg_latency_ms": 123.4, "cost": 0.0}}
-    settings = SimpleNamespace(max_guesses=10, timeout_seconds=60.0, max_tokens=300, code_length=4, max_digit=6)
-    return build(rounds, a, b, usage, usage, {"os": "testOS", "arch": "x", "cpu": "c", "ram_gb": 1, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"}, 42, settings, "abc123")
+def _result(name, model, acc, local=1.0, cracked_cols=None):
+    grade = Grade(accuracy=acc, per_column={"date": acc, "vendor": acc, "amount": acc, "category": acc, "note": acc}, dup_kept=1, dropped=2, junk_kept=0, rows_out=298)
+    stats = [StageStats("clean", model, requests=30, rows=300, seconds=40.0, unparsed=3, prompt_tokens=1000, completion_tokens=500, local_requests=int(30 * local))]
+    usage = {"totals": {"request_count": 30, "error_count": 0, "prompt_tokens": 1000, "completion_tokens": 500, "avg_latency_ms": 1333.3, "cost": 0.0}}
+    return TeamResult(team=_team(name, model), grade=grade, stages=stats, seconds=40.0, requests=30, local_share=local, weights_gb=1.9, usage=usage)
 
 
-def test_build_counts_wins_and_cracks():
-    card = _card()
-    fa, fb = card["fighters"]
-    assert (fa["wins"], fb["wins"]) == (2, 0)
-    assert fa["cracked"] == 2 and fb["cracked"] == 0
-    assert fa["avg_guesses"] == 4.0 and fa["avg_guesses_when_cracked"] == 4.0
-    assert fb["avg_guesses_when_cracked"] is None
-    assert fb["malformed_replies"] == 1
-    assert card["result"]["record"] == "A 2 - 0 B"
-    assert card["result"]["winner"].startswith("A")
+def _fight(team_acc=0.82, stock_acc=0.61, local=1.0):
+    return FightResult(seed=42, preset="medium", rows=300, messy_rows=340, dataset_sha="feedbeef", stock=_result("stock", "qwen2.5:3b", stock_acc), team=_result("my-team", "llama3.2:3b", team_acc, local))
 
 
-def test_render_shows_closeness_on_failed_rounds():
-    md = render_md(_card(cracked_a=False))
-    assert "fail, best 1/0" in md
-    assert "closer best guess wins" in md
+def test_card_delta_and_local_share():
+    card = build(_fight(), {"os": "testOS", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"})
+    assert card["result"]["delta_points"] == 21.0
+    assert card["result"]["winner"] == "my-team"
+    assert card["team"]["accuracy_pct"] == 82.0 and card["stock"]["accuracy_pct"] == 61.0
+    assert card["team"]["accuracy_per_gb"] == round(82.0 / 1.9, 1)
+    assert card["team"]["local_share_pct"] == 100.0
+    assert card["dataset"] == {"seed": 42, "preset": "medium", "rows": 300, "messy_rows": 340, "sha256": "feedbeef"}
+    assert card["team"]["sha256"] == "abc123def456"
 
 
-def test_render_handles_missing_values_and_cost():
-    md = render_md(_card(cracked_a=False))
-    assert "| Avg guesses when cracked | n/a | n/a |" in md
-    assert "| Cost | $0.00 | $0.00 |" in md
+def test_render_has_stage_table_and_no_None():
+    md = render_md(build(_fight(local=0.5), {"os": "t", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"}))
     assert "None" not in md
+    assert "| clean | llama3.2:3b | 30 | 300 | 40.0 | 3 |" in md
+    assert "+21.0" in md
+    assert "50%" in md  # local share
     assert "SEED=42" in md
+
+
+def test_render_marks_stock_win():
+    md = render_md(build(_fight(team_acc=0.5, stock_acc=0.6), {"os": "t", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"}))
+    assert "-10.0" in md and "stock" in md.lower()

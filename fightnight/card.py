@@ -1,39 +1,34 @@
-"""Build the fight card from the rounds the referee played and what Otari logged."""
+"""Build the fight card: stock vs your team on the same messy file, same machine."""
 
 from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from statistics import mean
 
-from .referee import Fighter, Round, fmt
-
-
-def _side(rounds: list[Round], corner: str) -> list:
-    return [r.a if corner == "a" else r.b for r in rounds]
+from .referee import FightResult, TeamResult
 
 
-def fighter_stats(rounds: list[Round], corner: str, fighter: Fighter, usage: dict) -> dict:
-    plays = _side(rounds, corner)
-    other = "b" if corner == "a" else "a"
-    guesses = [g for p in plays for g in p.guesses]
-    timed = [g.seconds for g in guesses if not g.timed_out]
-    totals = usage.get("totals", {})
+def _side(r: TeamResult) -> dict:
+    totals = r.usage.get("totals", {}) if r.usage else {}
+    acc = round(r.grade.accuracy * 100, 1)
     return {
-        "corner": corner.upper(),
-        "model": fighter.model,
-        "otari_alias": fighter.alias,
-        "wins": sum(1 for r in rounds if r.winner == corner),
-        "losses": sum(1 for r in rounds if r.winner == other),
-        "ties": sum(1 for r in rounds if r.winner == "tie"),
-        "cracked": sum(1 for p in plays if p.cracked),
-        "avg_guesses": round(mean(p.score for p in plays), 2) if plays else None,
-        "avg_guesses_when_cracked": round(mean(p.score for p in plays if p.cracked), 2) if any(p.cracked for p in plays) else None,
-        "avg_seconds_per_guess": round(mean(timed), 2) if timed else None,
-        "total_seconds": round(sum(p.seconds for p in plays), 1),
-        "malformed_replies": sum(p.malformed for p in plays),
-        "timeouts": sum(p.timeouts for p in plays),
+        "name": r.team.name,
+        "file": str(r.team.path),
+        "sha256": r.team.sha256,
+        "models": r.team.models(),
+        "accuracy_pct": acc,
+        "per_column_pct": {k: round(v * 100, 1) for k, v in r.grade.per_column.items()},
+        "dup_kept": r.grade.dup_kept,
+        "dropped": r.grade.dropped,
+        "junk_kept": r.grade.junk_kept,
+        "rows_out": r.grade.rows_out,
+        "seconds": r.seconds,
+        "requests": r.requests,
+        "unparsed_rows": sum(s.unparsed for s in r.stages),
+        "weights_gb": r.weights_gb,
+        "accuracy_per_gb": round(acc / r.weights_gb, 1) if r.weights_gb else None,
+        "local_share_pct": round(r.local_share * 100, 1),
         "otari_usage": {
             "requests": totals.get("request_count"),
             "errors": totals.get("error_count"),
@@ -42,27 +37,21 @@ def fighter_stats(rounds: list[Round], corner: str, fighter: Fighter, usage: dic
             "avg_gateway_latency_ms": round(totals["avg_latency_ms"]) if totals.get("avg_latency_ms") is not None else None,
             "cost_usd": totals.get("cost"),
         },
+        "stages": [{"name": s.name, "model": s.model, "requests": s.requests, "rows": s.rows, "seconds": round(s.seconds, 1), "unparsed": s.unparsed, "local_requests": s.local_requests} for s in r.stages],
     }
 
 
-def build(rounds, a, b, usage_a, usage_b, specs, gateway, seed, settings, strategy_sha) -> dict:
-    fa = fighter_stats(rounds, "a", a, usage_a)
-    fb = fighter_stats(rounds, "b", b, usage_b)
-    if fa["wins"] > fb["wins"]:
-        winner = f"A ({a.model})"
-    elif fb["wins"] > fa["wins"]:
-        winner = f"B ({b.model})"
-    else:
-        winner = "draw"
+def build(result: FightResult, specs: dict, gateway: dict) -> dict:
+    team, stock = _side(result.team), _side(result.stock)
+    delta = round(team["accuracy_pct"] - stock["accuracy_pct"], 1)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "game": {"name": "Codebreaker", "code_length": settings.code_length, "digits": f"1-{settings.max_digit}", "rounds": len(rounds), "max_guesses": settings.max_guesses, "timeout_seconds": settings.timeout_seconds, "max_tokens": settings.max_tokens, "seed": seed},
-        "strategy_sha256": strategy_sha,
+        "dataset": {"seed": result.seed, "preset": result.preset, "rows": result.rows, "messy_rows": result.messy_rows, "sha256": result.dataset_sha},
         "machine": specs,
         "gateway": gateway,
-        "fighters": [fa, fb],
-        "result": {"winner": winner, "record": f"A {fa['wins']} - {fb['wins']} B" + (f" ({fa['ties']} tied)" if fa["ties"] else "")},
-        "rounds": [{"n": r.n, "secret": fmt(r.secret), "a": _play_row(r.a), "b": _play_row(r.b), "winner": r.winner} for r in rounds],
+        "stock": stock,
+        "team": team,
+        "result": {"delta_points": delta, "winner": team["name"] if delta > 0 else (stock["name"] if delta < 0 else "draw")},
     }
 
 
@@ -70,31 +59,20 @@ def _na(v):
     return "n/a" if v is None else v
 
 
-def _play_row(p) -> dict:
-    return {"score": p.score, "cracked": p.cracked, "best_exact": p.best[0], "best_misplaced": p.best[1] - p.best[0], "seconds": round(p.seconds, 1)}
-
-
-def _row(label, fa, fb, key, f=lambda v: v):
-    return f"| {label} | {_na(f(fa[key]))} | {_na(f(fb[key]))} |"
-
-
-def _round_cell(p: dict) -> str:
-    if p["cracked"]:
-        return f"{p['score']} ({p['seconds']}s)"
-    return f"fail, best {p['best_exact']}/{p['best_misplaced']} ({p['seconds']}s)"
+def _pct(v):
+    return "n/a" if v is None else f"{v:.0f}%"
 
 
 def render_md(card: dict) -> str:
-    fa, fb = card["fighters"]
-    m = card["machine"]
-    g = card["game"]
-    gw = card["gateway"]
-    ua, ub = fa["otari_usage"], fb["otari_usage"]
+    t, s, m, d, gw = card["team"], card["stock"], card["machine"], card["dataset"], card["gateway"]
+    delta = card["result"]["delta_points"]
+    sign = "+" if delta >= 0 else ""
+    headline = f"**{t['name']}** beat the stock team by **{sign}{delta} points**" if delta > 0 else (f"The **stock** team won by **{delta} points**" if delta < 0 else "A **draw**")
     gpu = m.get("gpu", "") + (f" ({m['gpu_note']})" if m.get("gpu_note") else "")
     lines = [
-        "# Fight card: Otari Local Model Fight Night",
+        "# Fight card: Otari Fight Night",
         "",
-        f"**{card['result']['winner']}** takes it, {card['result']['record']}. {g['rounds']} rounds of Codebreaker, generated {card['generated_at']}.",
+        f"{headline}: {t['accuracy_pct']}% vs {s['accuracy_pct']}% cell accuracy on {d['rows']} rows ({d['messy_rows']} messy), preset `{d['preset']}`. Generated {card['generated_at']}.",
         "",
         "## Machine",
         "",
@@ -104,46 +82,49 @@ def render_md(card: dict) -> str:
         f"- GPU: {gpu}",
         f"- Ollama {gw.get('ollama_version')}, Otari {gw.get('otari_version')} at {gw.get('otari_url')}",
         "",
-        "## Fighters",
+        "## Stock vs your team",
         "",
-        "| | A | B |",
+        "| | stock | yours |",
         "|---|---|---|",
-        _row("Model", fa, fb, "model", lambda v: f"`{v}`"),
-        _row("Wins", fa, fb, "wins"),
-        _row("Cracked", fa, fb, "cracked", lambda v: f"{v}/{g['rounds']}"),
-        _row(f"Avg guesses (fail = {g['max_guesses'] + 1})", fa, fb, "avg_guesses"),
-        _row("Avg guesses when cracked", fa, fb, "avg_guesses_when_cracked"),
-        _row("Avg seconds per guess", fa, fb, "avg_seconds_per_guess"),
-        _row("Malformed replies", fa, fb, "malformed_replies"),
-        _row("Timeouts", fa, fb, "timeouts"),
+        f"| Team file | `{s['file']}` | `{t['file']}` |",
+        f"| Models | {', '.join(f'`{x}`' for x in s['models'])} | {', '.join(f'`{x}`' for x in t['models'])} |",
+        f"| Accuracy | {s['accuracy_pct']}% | **{t['accuracy_pct']}%** ({sign}{delta}) |",
+        f"| Duplicates kept | {s['dup_kept']} | {t['dup_kept']} |",
+        f"| Real rows dropped | {s['dropped']} | {t['dropped']} |",
+        f"| Junk rows kept | {s['junk_kept']} | {t['junk_kept']} |",
+        f"| Rows the models broke (kept as-is) | {s['unparsed_rows']} | {t['unparsed_rows']} |",
+        f"| Seconds | {s['seconds']} | {t['seconds']} |",
+        f"| Requests | {s['requests']} | {t['requests']} |",
+        f"| Model weights loaded | {s['weights_gb']} GB | {t['weights_gb']} GB |",
+        f"| Accuracy per GB | {_na(s['accuracy_per_gb'])} | {_na(t['accuracy_per_gb'])} |",
+        f"| Rows processed locally | {_pct(s['local_share_pct'])} | {_pct(t['local_share_pct'])} |",
         "",
-        "## Otari usage (from the gateway's own log, per fighter key)",
+        "Per column accuracy (yours): " + ", ".join(f"{k} {v}%" for k, v in t["per_column_pct"].items()),
         "",
-        "| | A | B |",
+        "## Otari usage (from the gateway's own log, per team key)",
+        "",
+        "| | stock | yours |",
         "|---|---|---|",
-        f"| Requests | {ua['requests']} | {ub['requests']} |",
-        f"| Errors | {ua['errors']} | {ub['errors']} |",
-        f"| Prompt tokens | {ua['prompt_tokens']} | {ub['prompt_tokens']} |",
-        f"| Completion tokens | {ua['completion_tokens']} | {ub['completion_tokens']} |",
-        f"| Avg gateway latency (ms) | {ua['avg_gateway_latency_ms']} | {ub['avg_gateway_latency_ms']} |",
-        f"| Cost | ${ua['cost_usd'] or 0:.2f} | ${ub['cost_usd'] or 0:.2f} |",
-        "",
-        "## Rules",
-        "",
-        f"{g['code_length']} digits from {g['digits']}, repeats allowed, {g['max_guesses']} guesses max, {g['timeout_seconds']:.0f}s per reply, {g['max_tokens']} max tokens. Same secret for both fighters each round, played one after the other. Fewer guesses wins the round. If neither cracks it, the closer best guess wins (most exact, then most right digits). Only then does speed decide.",
-        "",
-        f"Seed `{g['seed']}` (replay with `SEED={g['seed']} make fight`). Strategy file sha256 `{card['strategy_sha256']}`.",
-        "",
-        "## Rounds",
-        "",
-        "| # | Secret | A | B | Winner |",
-        "|---|---|---|---|---|",
     ]
-    for r in card["rounds"]:
-        sa = _round_cell(r["a"])
-        sb = _round_cell(r["b"])
-        lines.append(f"| {r['n']} | {r['secret']} | {sa} | {sb} | {r['winner'].upper() if r['winner'] != 'tie' else 'tie'} |")
-    lines.append("")
+    for label, key in (("Requests", "requests"), ("Errors", "errors"), ("Prompt tokens", "prompt_tokens"), ("Completion tokens", "completion_tokens"), ("Avg gateway latency (ms)", "avg_gateway_latency_ms")):
+        lines.append(f"| {label} | {_na(s['otari_usage'][key])} | {_na(t['otari_usage'][key])} |")
+    lines.append(f"| Cost | ${s['otari_usage']['cost_usd'] or 0:.2f} | ${t['otari_usage']['cost_usd'] or 0:.2f} |")
+    lines += [
+        "",
+        "## Your team, stage by stage",
+        "",
+        "| Stage | Model | Requests | Rows | Seconds | Broken rows |",
+        "|---|---|---|---|---|---|",
+    ]
+    for st in t["stages"]:
+        lines.append(f"| {st['name']} | {st['model']} | {st['requests']} | {st['rows']} | {st['seconds']} | {st['unparsed']} |")
+    lines += [
+        "",
+        "## Reproduce",
+        "",
+        f"`SEED={d['seed']} PRESET={d['preset']} ROWS={d['rows']} make fight`. Messy file sha256 `{d['sha256']}`. Team file sha256 `{t['sha256']}`, stock `{s['sha256']}`.",
+        "",
+    ]
     return "\n".join(lines)
 
 

@@ -1,170 +1,123 @@
-"""The referee holds the secret, scores guesses and keeps time. It is plain code."""
+"""The referee: makes the messy file, runs stock then your team, grades both. Plain code."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
-import re
-import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
-import httpx
+from .corrupt import COLUMNS, corrupt, make_golden, read_csv, write_csv
+from .grade import Grade, grade
+from .otari import ChatResult, Otari
+from .pipeline import Call, StageStats, local_share, run_team
+from .team import Team
 
-from .config import Settings
-from .game import Closeness, Rules, closeness, compare_rounds, make_secret, parse_guess, score
-from .otari import Otari, OtariError
-
-_COMMENT = re.compile(r"<!--.*?-->", re.S)
-
-
-@dataclass
-class Fighter:
-    corner: str  # "A" or "B"
-    alias: str  # Otari alias: fighter-a / fighter-b
-    model: str
-    api_key: str
+DATA_DIR = Path("data")
+SAMPLE_PATH = DATA_DIR / "sample.csv"
 
 
 @dataclass
-class Guess:
-    n: int
-    raw: str
-    guess: list[int] | None
-    exact: int | None
-    misplaced: int | None
+class TeamResult:
+    team: Team
+    grade: Grade
+    stages: list[StageStats]
     seconds: float
-    prompt_tokens: int
-    completion_tokens: int
-    malformed: bool = False
-    timed_out: bool = False
+    requests: int
+    local_share: float
+    weights_gb: float
+    usage: dict
 
 
 @dataclass
-class Play:
-    corner: str
-    model: str
-    cracked: bool
-    score: int
-    seconds: float
-    guesses: list[Guess] = field(default_factory=list)
-
-    @property
-    def best(self) -> Closeness:
-        """(exact, exact + misplaced) of the best guess this round."""
-        return closeness([(g.exact, g.misplaced) for g in self.guesses if g.exact is not None])
-
-    @property
-    def malformed(self) -> int:
-        return sum(1 for g in self.guesses if g.malformed)
-
-    @property
-    def timeouts(self) -> int:
-        return sum(1 for g in self.guesses if g.timed_out)
+class FightResult:
+    seed: int
+    preset: str
+    rows: int
+    messy_rows: int
+    dataset_sha: str
+    stock: TeamResult
+    team: TeamResult
 
 
-@dataclass
-class Round:
-    n: int
-    secret: list[int]
-    a: Play
-    b: Play
-    winner: str  # "a", "b" or "tie"
+def make_dataset(seed: int, rows: int, preset: str, out_dir: Path = DATA_DIR) -> tuple[list[dict], list[dict], str]:
+    """Write data/golden.csv and data/messy.csv; return (golden, messy, sha of messy)."""
+    out_dir.mkdir(exist_ok=True)
+    golden = make_golden(rows, random.Random(seed))
+    messy = corrupt(golden, random.Random(seed + 1), preset)
+    write_csv(out_dir / "golden.csv", golden, COLUMNS)
+    write_csv(out_dir / "messy.csv", messy, COLUMNS)
+    sha = hashlib.sha256((out_dir / "messy.csv").read_bytes()).hexdigest()[:12]
+    return golden, messy, sha
 
 
-def load_strategy(path: Path = Path("strategy.md")) -> str:
-    """strategy.md minus HTML comments is the system prompt both fighters get."""
-    text = path.read_text()
-    return _COMMENT.sub("", text).strip()
+def load_sample() -> list[dict]:
+    return read_csv(SAMPLE_PATH) if SAMPLE_PATH.exists() else make_golden(20, random.Random(1))
 
 
-def fmt(code: list[int] | None) -> str:
-    return "".join(map(str, code)) if code else "----"
+def chat_via(otari: Otari, api_key: str, timeout: float) -> Callable[[str, list[dict], int], ChatResult]:
+    def chat(model: str, messages: list[dict], max_tokens: int) -> ChatResult:
+        return otari.chat(api_key, model, messages, max_tokens, timeout)
+
+    return chat
 
 
-def rules_for(s: Settings) -> Rules:
-    return Rules(code_length=s.code_length, max_digit=s.max_digit)
+def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict], chat, log, sizes: dict[str, float], usage_fn=None, label: str = "") -> TeamResult:
+    calls: list[Call] = []
+    t0 = datetime.now(timezone.utc)
+
+    def on_call(c: Call) -> None:
+        calls.append(c)
+        log({"team": label or team.name, **asdict(c)})
+        print(f"\r  {label or team.name}: {c.stage} {c.model} request {len(calls)}  ({sum(x.seconds for x in calls):.0f}s)".ljust(90), end="", flush=True)
+
+    cleaned, stages = run_team(team, [dict(r) for r in messy], sample, chat, on_call)
+    print()
+    g = grade(golden, cleaned) if golden else Grade(accuracy=0.0)
+    usage = usage_fn(t0.isoformat(timespec="seconds")) if usage_fn else {}
+    return TeamResult(
+        team=team,
+        grade=g,
+        stages=stages,
+        seconds=round(sum(c.seconds for c in calls), 1),
+        requests=len(calls),
+        local_share=local_share(calls),
+        weights_gb=round(sum(sizes.get(m, 0.0) for m in team.models()), 2),
+        usage=usage,
+    ), cleaned
 
 
-def play_round(otari: Otari, fighter: Fighter, secret: list[int], strategy: str, s: Settings, log) -> Play:
-    rules = rules_for(s)
-    n_digits = rules.code_length
-    messages = [
-        {"role": "system", "content": strategy},
-        {"role": "user", "content": f"New game. The code is {n_digits} digits, each 1-{rules.max_digit}. You have {s.max_guesses} guesses. Make your first guess."},
-    ]
-    play = Play(corner=fighter.corner, model=fighter.model, cracked=False, score=s.max_guesses + 1, seconds=0.0)
-    for n in range(1, s.max_guesses + 1):
-        left = s.max_guesses - n
-        try:
-            res = otari.chat(fighter.api_key, fighter.alias, messages, s.max_tokens, s.timeout_seconds)
-        except httpx.TimeoutException:
-            g = Guess(n, "", None, None, None, s.timeout_seconds, 0, 0, timed_out=True)
-            play.guesses.append(g)
-            play.seconds += g.seconds
-            log(fighter, secret, g)
-            messages.append({"role": "user", "content": f"No reply within {s.timeout_seconds:.0f} seconds. That cost a guess. {left} left. Reply with exactly {n_digits} digits 1-{rules.max_digit}."})
-            continue
-        play.seconds += res.seconds
-        guess = parse_guess(res.content, rules)
-        if guess is None:
-            g = Guess(n, res.content, None, None, None, res.seconds, res.prompt_tokens, res.completion_tokens, malformed=True)
-            play.guesses.append(g)
-            log(fighter, secret, g)
-            messages.append({"role": "assistant", "content": res.content[:600]})
-            messages.append({"role": "user", "content": f"Invalid guess, that cost a guess. {left} left. Reply with exactly {n_digits} digits 1-{rules.max_digit} and nothing else."})
-            continue
-        exact, misplaced = score(secret, guess)
-        g = Guess(n, res.content, guess, exact, misplaced, res.seconds, res.prompt_tokens, res.completion_tokens)
-        play.guesses.append(g)
-        log(fighter, secret, g)
-        if exact == n_digits:
-            play.cracked = True
-            play.score = n
-            break
-        messages.append({"role": "assistant", "content": res.content[:600]})
-        messages.append({"role": "user", "content": f"Guess {fmt(guess)}: {exact} exact, {misplaced} misplaced. {left} guesses left. Next guess."})
-    return play
+def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, float], log_path: Path = Path("fight-log.jsonl")) -> FightResult:
+    seed = settings.seed if settings.seed is not None else random.SystemRandom().randrange(1, 10**6)
+    golden, messy, sha = make_dataset(seed, settings.rows, settings.preset)
+    sample = load_sample()
+    print(f"  dataset: {len(golden)} clean rows -> {len(messy)} messy rows, preset {settings.preset}, seed {seed}")
+    with log_path.open("w") as f:
+        def log(row: dict) -> None:
+            f.write(json.dumps(row) + "\n")
+
+        results = {}
+        for label, t, key in (("stock", stock, settings.key_stock), ("team", team, settings.key_team)):
+            usage_fn = (lambda since, k=key: otari.key_usage(k, since)) if otari else None
+            r, cleaned = run_one(t, messy, golden, sample, chat_via(otari, key, settings.timeout_seconds), log, sizes, usage_fn, label=label)
+            write_csv(DATA_DIR / f"{label}.clean.csv", cleaned, COLUMNS)
+            print(f"  {label} ({t.name}): {r.grade.accuracy * 100:.1f}% in {r.seconds:.0f}s, {r.requests} requests, {r.weights_gb} GB of models, dup kept {r.grade.dup_kept}, dropped {r.grade.dropped}, junk kept {r.grade.junk_kept}")
+            results[label] = r
+    return FightResult(seed=seed, preset=settings.preset, rows=len(golden), messy_rows=len(messy), dataset_sha=sha, stock=results["stock"], team=results["team"])
 
 
-def describe(play: Play) -> str:
-    parts = []
-    for g in play.guesses:
-        if g.timed_out:
-            parts.append("TIMEOUT")
-        elif g.malformed:
-            parts.append("BAD")
-        else:
-            parts.append(f"{fmt(g.guess)}({g.exact}/{g.misplaced})")
-    tail = f"cracked in {play.score}" if play.cracked else f"failed, best {play.best[0]}/{play.best[1] - play.best[0]}"
-    return f"{' '.join(parts)}  {tail}, {play.seconds:.1f}s"
-
-
-def run_fight(otari: Otari, a: Fighter, b: Fighter, strategy: str, s: Settings, seed: int, log_path: Path = Path("fight-log.jsonl")) -> list[Round]:
-    rng = random.Random(seed)
-    rules = rules_for(s)
-    rounds: list[Round] = []
-    wins = {"a": 0, "b": 0, "tie": 0}
-    log_file = log_path.open("w")
-
-    def log(fighter: Fighter, secret: list[int], g: Guess) -> None:
-        row = {"round": len(rounds) + 1, "corner": fighter.corner, "model": fighter.model, "secret": fmt(secret), **asdict(g)}
-        log_file.write(json.dumps(row) + "\n")
-        log_file.flush()
-
-    try:
-        for n in range(1, s.rounds + 1):
-            secret = make_secret(rng, rules)
-            print(f"\nRound {n}/{s.rounds}  (secret {fmt(secret)})")
-            pa = play_round(otari, a, secret, strategy, s, log)
-            print(f"  A {a.model:<18} {describe(pa)}")
-            pb = play_round(otari, b, secret, strategy, s, log)
-            print(f"  B {b.model:<18} {describe(pb)}")
-            winner = compare_rounds((pa.score, pa.best, pa.seconds), (pb.score, pb.best, pb.seconds))
-            wins[winner] += 1
-            verdict = {"a": f"A wins", "b": f"B wins", "tie": "tie"}[winner]
-            print(f"  -> {verdict}   [A {wins['a']} - {wins['b']} B" + (f", {wins['tie']} tied" if wins["tie"] else "") + "]")
-            rounds.append(Round(n, secret, pa, pb, winner))
-    finally:
-        log_file.close()
-    return rounds
+def clean_file(team: Team, path: Path, sample: list[dict], chat, on_call) -> Path:
+    """Run a team on any CSV. Rows get an id for the pipeline and lose it again on the way out."""
+    rows = read_csv(path)
+    columns = list(rows[0].keys()) if rows else []
+    had_id = "id" in columns
+    for i, r in enumerate(rows):
+        if not had_id:
+            r["id"] = f"R{i + 1:05d}"
+    cleaned, _ = run_team(team, rows, sample, chat, on_call)
+    out = path.with_name(path.stem + ".clean.csv")
+    write_csv(out, cleaned, columns if had_id else [c for c in columns if c != "id"])
+    return out

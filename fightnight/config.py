@@ -35,28 +35,26 @@ def init_env(example: Path = EXAMPLE_PATH, target: Path = ENV_PATH) -> bool:
         return False
     text = example.read_text()
     text = text.replace("OTARI_MASTER_KEY=__GENERATED__", f"OTARI_MASTER_KEY=sk-otari-admin-{secrets.token_urlsafe(24)}")
-    text = text.replace("FIGHTER_A_KEY=__GENERATED__", f"FIGHTER_A_KEY={new_otari_key()}")
-    text = text.replace("FIGHTER_B_KEY=__GENERATED__", f"FIGHTER_B_KEY={new_otari_key()}")
+    text = text.replace("TEAM_KEY=__GENERATED__", f"TEAM_KEY={new_otari_key()}")
+    text = text.replace("STOCK_KEY=__GENERATED__", f"STOCK_KEY={new_otari_key()}")
     target.write_text(text)
     return True
 
 
 @dataclass
 class Settings:
-    fighter_a: str
-    fighter_b: str
     master_key: str
-    key_a: str
-    key_b: str
+    key_team: str
+    key_stock: str
+    otari_ai_key: str
     otari_url: str
     ollama_url: str
-    rounds: int
+    team_path: Path
+    stock_path: Path
+    rows: int
+    preset: str
     seed: int | None
-    max_guesses: int
     timeout_seconds: float
-    max_tokens: int
-    code_length: int
-    max_digit: int
 
     @classmethod
     def load(cls) -> "Settings":
@@ -67,18 +65,16 @@ class Settings:
 
         seed_raw = get("SEED")
         return cls(
-            fighter_a=get("FIGHTER_A", "llama3.1:8b"),
-            fighter_b=get("FIGHTER_B", "qwen2.5:7b"),
             master_key=get("OTARI_MASTER_KEY"),
-            key_a=get("FIGHTER_A_KEY"),
-            key_b=get("FIGHTER_B_KEY"),
+            key_team=get("TEAM_KEY"),
+            key_stock=get("STOCK_KEY"),
+            otari_ai_key=get("OTARI_AI_KEY"),
             otari_url=get("OTARI_URL", "http://localhost:8000").rstrip("/"),
             ollama_url=get("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
-            rounds=int(get("ROUNDS", "20")),
+            team_path=Path(get("TEAM", "team.yml")),
+            stock_path=Path(get("STOCK", "teams/stock.yml")),
+            rows=int(get("ROWS", "300")),
+            preset=get("PRESET", "medium"),
             seed=int(seed_raw) if seed_raw else None,
-            max_guesses=int(get("MAX_GUESSES", "10")),
-            timeout_seconds=float(get("TIMEOUT_SECONDS", "60")),
-            max_tokens=int(get("MAX_TOKENS", "300")),
-            code_length=int(get("CODE_LENGTH", "4")),
-            max_digit=int(get("MAX_DIGIT", "6")),
+            timeout_seconds=float(get("TIMEOUT_SECONDS", "120")),
         )

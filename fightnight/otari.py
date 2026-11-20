@@ -96,6 +96,26 @@ class Otari:
                 notes.append(f"switched on {model} at $0")
         return notes
 
+    def ensure_otari_ai(self, api_key: str) -> str:
+        """Store otari.ai as a hosted provider named 'otari-ai' so a team can point a stage at
+        `otari-ai:<vendor>/<model>`. Returns a one-line note."""
+        h = self._admin()
+        r = self.http.get(f"{self.base_url}/api/v1/hosted-providers", headers=h)
+        r.raise_for_status()
+        existing = next((p for p in r.json().get("data", []) if p["name"] == "otari-ai"), None)
+        body = {"name": "otari-ai", "provider": "otari", "api_key": api_key}
+        if existing is None:
+            r = self.http.post(f"{self.base_url}/api/v1/hosted-providers", headers=h, json=body)
+            if r.status_code >= 400:
+                raise OtariError(f"adding the otari-ai provider failed: HTTP {r.status_code} {r.text[:200]}")
+            r = self.http.post(f"{self.base_url}/api/v1/hosted-providers/otari-ai/models/refresh", headers=h, json={})
+            n = len(r.json().get("added", [])) if r.status_code < 400 else 0
+            return f"connected otari.ai as hosted provider otari-ai ({n} models listed)"
+        r = self.http.patch(f"{self.base_url}/api/v1/hosted-providers/otari-ai", headers=h, json={"api_key": api_key})
+        if r.status_code >= 400 and r.status_code != 409:
+            raise OtariError(f"updating the otari-ai key failed: HTTP {r.status_code} {r.text[:200]}")
+        return "otari.ai connected as hosted provider otari-ai"
+
     def _roster(self, provider: str) -> list[dict]:
         r = self.http.get(f"{self.base_url}/api/v1/hosted-providers/{provider}/models", headers=self._admin())
         r.raise_for_status()

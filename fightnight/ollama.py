@@ -66,3 +66,16 @@ def ensure(base_url: str, models: list[str]) -> list[str]:
             pull(base_url, m)
             pulled.append(m)
     return pulled
+
+
+def sizes(base_url: str) -> dict[str, float]:
+    """Model name -> size in GB, from Ollama's own listing. The pound-for-pound denominator."""
+    r = httpx.get(f"{base_url}/api/tags", timeout=10)
+    r.raise_for_status()
+    out: dict[str, float] = {}
+    for m in r.json().get("models", []):
+        gb = round(m.get("size", 0) / 1e9, 2)
+        out[m["name"]] = gb
+        if m["name"].endswith(":latest"):
+            out[m["name"].removesuffix(":latest")] = gb
+    return out

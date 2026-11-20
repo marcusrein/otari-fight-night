@@ -1,27 +1,22 @@
-# Otari gateway config. You should not need to edit this: fighters are picked in .env.
+# Otari gateway config. You should not need to edit this: models live in team.yml.
 master_key: ${OTARI_MASTER_KEY}
 
 # Local models cost nothing; without this Otari refuses unpriced traffic with a 402.
 require_pricing: false
 
 # Ollama runs on your machine, not in Docker, so the GPU is used. The referee
-# switches the two fighter models on under this provider before round one.
+# switches every model your team files name on under this provider before a fight.
+# otari.ai, if you set OTARI_AI_KEY in .env, is added at runtime as hosted provider "otari-ai".
 hosted_providers:
   ollama:
     api_base: http://host.docker.internal:11434
 
-# One alias per corner. The referee asks for "fighter-a" and "fighter-b" and
-# never needs to know which model is behind them.
-aliases:
-  fighter-a: "ollama:${FIGHTER_A}"
-  fighter-b: "ollama:${FIGHTER_B}"
-
-# One scoped key per corner, so the dashboard and usage API attribute every
-# request to the right fighter.
+# One scoped key per team, so the dashboard and the usage API split every
+# request between the stock team and yours.
 api_keys:
-  fighter-a:
-    secret: ${FIGHTER_A_KEY}
-    user_id: fighter-a
-  fighter-b:
-    secret: ${FIGHTER_B_KEY}
-    user_id: fighter-b
+  team:
+    secret: ${TEAM_KEY}
+    user_id: team
+  stock:
+    secret: ${STOCK_KEY}
+    user_id: stock
