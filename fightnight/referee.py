@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,10 +73,15 @@ def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict
     def on_call(c: Call) -> None:
         calls.append(c)
         log({"team": label or team.name, **asdict(c)})
-        print(f"\r  {label or team.name}: {c.stage} {c.model} request {len(calls)}  ({sum(x.seconds for x in calls):.0f}s)".ljust(90), end="", flush=True)
+        line = f"  {label or team.name}: {c.stage} {c.model} request {len(calls)}, {c.rows_in} rows, {c.seconds:.1f}s  (total {sum(x.seconds for x in calls):.0f}s)"
+        if sys.stdout.isatty():
+            print("\r" + line.ljust(100), end="", flush=True)
+        else:
+            print(line, flush=True)
 
     cleaned, stages = run_team(team, [dict(r) for r in messy], sample, chat, on_call)
-    print()
+    if sys.stdout.isatty():
+        print()
     g = grade(golden, cleaned) if golden else Grade(accuracy=0.0)
     usage = usage_fn(t0.isoformat(timespec="seconds")) if usage_fn else {}
     return TeamResult(

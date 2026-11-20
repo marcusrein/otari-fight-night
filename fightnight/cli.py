@@ -133,13 +133,13 @@ def cmd_clean(path_arg: str | None) -> None:
 
     def on_call(c) -> None:
         n[0] += 1
-        print(f"\r  {c.stage} {c.model} request {n[0]}".ljust(80), end="", flush=True)
+        print(f"  {c.stage} {c.model} request {n[0]}, {c.rows_in} rows, {c.seconds:.1f}s", flush=True)
 
     try:
         out = clean_file(team, path, load_sample(), chat_via(otari, s.key_team, s.timeout_seconds), on_call)
     except OtariError as e:
         die(str(e))
-    print(f"\nwrote {out}")
+    print(f"wrote {out}")
 
 
 def main(argv: list[str] | None = None) -> None:

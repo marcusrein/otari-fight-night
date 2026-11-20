@@ -50,6 +50,7 @@ class StageStats:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     local_requests: int = 0
+    refused_drops: int = 0  # rows a model wanted to delete that plain code kept
 
 
 def qualify_model(model: str) -> str:
@@ -141,14 +142,37 @@ class Runner:
         for i in range(0, len(rows), stage.batch):
             yield rows[i:i + stage.batch]
 
+    def _apply_drops(self, stage: Stage, rows: list[dict]) -> list[dict]:
+        """Honor "drop": true only where plain code agrees: an empty id (junk) or an id another
+        row shares (duplicate). The first occurrence of a duplicated id is always kept."""
+        ids = [str(r.get("id", "")).strip() for r in rows]
+        counts = Counter(ids)
+        flagged = [_truthy(r.get("drop")) for r in rows]
+        refused = 0
+        for rid, n in counts.items():
+            if rid and n > 1:
+                idx = [i for i, x in enumerate(ids) if x == rid]
+                if all(flagged[i] for i in idx):
+                    flagged[idx[0]] = False  # never delete every copy
+                    refused += 1
+        kept: list[dict] = []
+        for r, rid, drop in zip(rows, ids, flagged):
+            if drop and (rid == "" or counts[rid] > 1):
+                continue
+            if drop:
+                refused += 1
+            kept.append(_strip(r, {"drop"}))
+        self.stats[stage.name].refused_drops += refused
+        return kept
+
     def _map(self, stage: Stage, rows: list[dict]) -> list[dict]:
         out: list[dict] = []
         system = self.prompt(stage)
         for batch in self._batches(stage, rows):
-            merged, _ = self.ask(stage, stage.model, system, batch, '. A row that should be removed gets "drop": true')
-            out.extend(r for r in merged if not _truthy(r.get("drop")))
+            merged, _ = self.ask(stage, stage.model, system, batch, '. A junk row or a duplicate that should be removed gets "drop": true')
+            out.extend(merged)
         self.stats[stage.name].rows += len(rows)
-        return [_strip(r, {"drop"}) for r in out]
+        return self._apply_drops(stage, out)
 
     def _vote(self, stage: Stage, rows: list[dict]) -> list[dict]:
         system = self.prompt(stage)
@@ -183,9 +207,8 @@ class Runner:
                 r.pop("flag", None)
             for batch in self._batches(stage, flagged):
                 self.ask(stage, stage.model, system, batch, extra)  # mutates the row objects in place
-        out = [r for r in out if not _truthy(r.get("drop"))]
         self.stats[stage.name].rows += len(rows)
-        return [_strip(r, {"drop", "flag"}) for r in out]
+        return [_strip(r, {"flag"}) for r in self._apply_drops(stage, out)]
 
     def _route(self, stage: Stage, rows: list[dict]) -> list[dict]:
         """Split rows by a column, run each target stage on its slice, merge back in original order."""

@@ -93,7 +93,7 @@ def test_map_prompt_gets_sample_and_rows_have_no_private_keys(tmp_path):
     assert seen["keys"] == set(ROWS[0])
 
 
-def test_map_drop_flag_removes_row_and_position_match_beats_rid(tmp_path):
+def test_map_drop_on_real_row_is_refused_and_position_match_beats_rid(tmp_path):
     team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
 
     def answer(model, rows):
@@ -104,8 +104,9 @@ def test_map_drop_flag_removes_row_and_position_match_beats_rid(tmp_path):
         return json.dumps(out)
 
     out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
-    assert len(out) == 9
-    assert out[0]["id"] == "T0002" and out[0]["vendor"] == "ByPosition"
+    assert len(out) == 10, "a real row with a unique id is never deleted on a model's say-so"
+    assert stats[0].refused_drops == 1
+    assert out[1]["id"] == "T0002" and out[1]["vendor"] == "ByPosition"
     assert all("drop" not in r for r in out)
 
 
@@ -193,3 +194,28 @@ stages:
     run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(echo), calls.append)
     assert local_share(calls) == 0.5
     assert calls[0].provider == "ollama" and calls[-1].provider == "otari-ai"
+
+
+def test_drop_is_only_honored_for_junk_or_duplicates(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+    rows = [dict(r) for r in ROWS[:4]]
+    rows.append(dict(ROWS[0]))  # duplicate id T0001
+    rows.append({"id": "", "date": "TOTAL", "vendor": "", "amount": "9", "category": "", "note": ""})  # junk
+
+    def answer(model, rows):
+        return json.dumps([{**r, "drop": True} for r in rows])  # model wants to delete everything
+
+    out, stats = run_team(team, rows, SAMPLE, FakeChat(answer), lambda c: None)
+    ids = [r["id"] for r in out]
+    assert ids == ["T0001", "T0002", "T0003", "T0004"], "junk and one duplicate removed, real rows kept"
+    assert stats[0].refused_drops == 4
+
+
+def test_verify_drop_guard_applies_too(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: v, type: verify, model: a, batch: 10, prompt: prompts/p.md}\n")
+
+    def answer(model, rows):
+        return json.dumps([{**r, "drop": True} for r in rows])
+
+    out, _ = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
+    assert len(out) == 10
