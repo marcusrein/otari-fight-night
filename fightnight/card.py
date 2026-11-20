@@ -64,6 +64,11 @@ def _pct(v):
     return "n/a" if v is None else f"{v:.0f}%"
 
 
+def _usd(v) -> str:
+    v = v or 0
+    return f"${v:.2f}" if v == 0 or v >= 0.01 else f"${v:.4f}"
+
+
 def render_md(card: dict) -> str:
     t, s, m, d, gw = card["team"], card["stock"], card["machine"], card["dataset"], card["gateway"]
     delta = card["result"]["delta_points"]
@@ -110,7 +115,7 @@ def render_md(card: dict) -> str:
     ]
     for label, key in (("Requests", "requests"), ("Errors", "errors"), ("Prompt tokens", "prompt_tokens"), ("Completion tokens", "completion_tokens"), ("Avg gateway latency (ms)", "avg_gateway_latency_ms")):
         lines.append(f"| {label} | {_na(s['otari_usage'][key])} | {_na(t['otari_usage'][key])} |")
-    lines.append(f"| Cost | ${s['otari_usage']['cost_usd'] or 0:.2f} | ${t['otari_usage']['cost_usd'] or 0:.2f} |")
+    lines.append(f"| Cost | {_usd(s['otari_usage']['cost_usd'])} | {_usd(t['otari_usage']['cost_usd'])} |")
     lines += [
         "",
         "## Your team, stage by stage",

@@ -1,17 +1,21 @@
 # Otari Fight Night
 
-Two local models. One referee. One gateway. Who cracks the code first?
+Two teams of local models. One messy spreadsheet. One gateway. Whose split of the job cleans it best on your machine?
 
-Run [Otari](https://github.com/mozilla-ai/otari) on your own machine in front of two
-Ollama models, pit them against each other in 20 rounds of Codebreaker (Mastermind), and
-walk away with a fight card that says which model suits your hardware. Nothing leaves your
-machine and nothing costs money.
+Run [Otari](https://github.com/mozilla-ai/otari) on your own machine as the router in front of a small
+team of Ollama models, point the team at a deliberately terrible CSV, and get a fight card that says
+how your team did against the stock team on the same file, on the same hardware. Nothing leaves your
+machine unless you decide it should, and the card proves it from Otari's own usage log.
 
 ```
-Round 7/20  (secret 3516)
-  A llama3.1:8b        1234(1/1) 1356(2/2) 3516(4/0)  cracked in 3, 1.4s
-  B qwen2.5:7b         1221(1/0) 2321(1/1) 1331(2/0) 4331(1/0) 1431(1/1) 2431(1/1) 1241(1/0) 3241(1/2) 1341(1/0) 2341(1/1)  failed, best 2/0, 2.5s
-  -> A wins   [A 4 - 3 B]
+Otari Fight Night: CSV cleanup
+  stock: teams/stock.yml (qwen2.5:3b)
+  yours: team.yml (qwen2.5:3b, llama3.2:3b)
+  dataset: 100 clean rows -> 114 messy rows, preset medium, seed 48121
+  stock (stock): 71.4% in 142s, 20 requests, 1.93 GB of models, dup kept 1, dropped 0, junk kept 2
+  team (triage-and-route): 78.9% in 201s, 31 requests, 3.95 GB of models, dup kept 0, dropped 0, junk kept 1
+
+triage-and-route 78.9% vs stock 71.4%: +7.5 points.
 ```
 
 ## You need
@@ -27,13 +31,12 @@ Round 7/20  (secret 3516)
 make fight
 ```
 
-First run: writes `.env` with generated keys, starts Otari, pulls the two default
-models (about 5 GB each, they need 16 GB of RAM together), switches them on in Otari, plays
-20 rounds. On an 8 GB machine set the 3B pair in `.env` first (table below). Later runs skip the
-slow parts. A quick two-round check:
+First run: writes `.env` with generated keys, starts Otari, pulls the models your team files name
+(the defaults are about 2 GB each), switches them on in Otari, generates the messy file, runs the
+stock team, runs yours, grades both, writes the card. A quick check:
 
 ```bash
-ROUNDS=2 make fight
+ROWS=20 make fight
 ```
 
 No `make`? The same thing is three commands:
@@ -46,86 +49,167 @@ uv run fight.py
 
 ## What you get
 
-- `fight-card.md`: machine specs, both fighters' record, average guesses and seconds per
-  guess, malformed replies and timeouts, plus what Otari logged per fighter key. This is
-  what you submit.
+- `fight-card.md`: machine specs, stock vs yours (accuracy, delta, duplicates kept, rows dropped,
+  junk kept, seconds, requests, model weights loaded, accuracy per GB, share of rows processed
+  locally), Otari's own per-key usage, and a stage-by-stage table for your team. This is what you
+  submit.
 - `fight-card.json`: the same data for the community "what runs on what" table.
-- `fight-log.jsonl`: every guess, raw reply and timing, if you want to dig.
-- The Otari dashboard at http://localhost:8000 with one API key per fighter. Sign in with
-  the admin key from `make keys`.
+- `fight-log.jsonl`: every request (stage, model, provider, rows in and out, seconds, tokens).
+- `data/team.clean.csv` and `data/stock.clean.csv` next to `data/messy.csv` and `data/golden.csv`,
+  so you can diff what each team got wrong.
+- The Otari dashboard at http://localhost:8000 with one API key per team. Sign in with the admin
+  key from `make keys`.
 
-## The one lever
+## The one lever: `team.yml`
 
-Edit `strategy.md`. It is the system prompt both fighters get. Add a worked example, a
-scratchpad, a constraint checklist, a fixed opening. The referee reads the last four
-digits 1-6 in a reply as the guess, so models can think out loud if the prompt lets them.
-Its hash is printed on the fight card so a submission ties to an exact prompt.
+Rows flow through stages in order. Four stage types, no code:
 
-## Change fighters
+```yaml
+name: triage-and-route
+stages:
+  - name: triage          # tag each row with what is wrong with it
+    type: map
+    model: qwen2.5:3b
+    batch: 15
+    prompt: prompts/triage.md
+  - name: route           # send each tag to a specialist
+    type: route
+    by: tag
+    to: {junk: junk, date: dates, "*": cleaner}
+  - name: junk
+    type: map
+    model: qwen2.5:3b
+    batch: 20
+    prompt: prompts/clean.md
+  - name: dates
+    type: map
+    model: llama3.2:3b
+    batch: 10
+    prompt: prompts/dates.md
+  - name: cleaner
+    type: map
+    model: qwen2.5:3b
+    batch: 5
+    prompt: prompts/clean.md
+  - name: check           # a second model re-reads everything against the clean sample
+    type: verify
+    model: llama3.2:3b
+    batch: 10
+    prompt: prompts/check.md
+    retry: 1
+```
 
-Edit `FIGHTER_A` and `FIGHTER_B` in `.env`. Any model Ollama can pull. Both are kept in
-memory at once, so pick a pair that fits your RAM.
+| Type | What it does | Knobs |
+|---|---|---|
+| `map` | One model gets rows in batches and returns them corrected. It may add keys (like `tag`) or mark junk and duplicates `"drop": true`. | `model`, `batch`, `prompt` |
+| `route` | Splits rows by a column's value and sends each group to a named stage. Those stages run only on their group. `"*"` catches the rest. | `by`, `to` |
+| `vote` | Several models answer for one column. Majority wins, ties go to the first model. | `models`, `column`, `prompt`, `batch` |
+| `verify` | One model re-checks rows with the clean sample in view. Rows it marks `"flag": true` are re-sent `retry` times. | `model`, `prompt`, `batch`, `retry` |
 
-| RAM | Pair that fits |
+Prompts are markdown files. `{sample}` in a prompt is replaced by 20 clean reference rows. The
+referee reads the last JSON array in each reply. Things the models cannot do, by design: change an
+id, or delete a real row. A `drop` is honored only for a row with no id (junk) or an id another row
+shares (a duplicate). The card counts how often a model tried anyway.
+
+Any model Ollama can pull works and is pulled on first use. Both teams' models are loaded
+during a fight, so pick a set that fits your RAM.
+
+| RAM | Fits |
 |---|---|
-| 8 GB | `llama3.2:3b` vs `qwen2.5:3b` |
-| 16 GB (default) | `llama3.1:8b` vs `qwen2.5:7b` |
-| 32 GB or a real GPU | `llama3.1:70b`-class or `qwen2.5:32b` vs anything |
+| 8 GB | one 3B model, or two 1B-2B |
+| 16 GB | two 3B, or one 7B/8B |
+| 32 GB or a real GPU | 7B/8B pairs, a 14B |
 
-Honest warning from the reference machine: with the plain prompt, 3B models never crack a
-4-digit code and 7B models rarely do. That is the point. The fight card still ranks them on
-how close they got, and the first good edit to `strategy.md` is where the cracks start.
+## Bring your own CSV
 
-Thinking models (`qwen3`, `deepseek-r1`) tend to burn the 60 second limit reasoning
-about digits. Try them, but that is your experiment, not the default.
+```bash
+make clean FILE=~/Downloads/bank-export.csv
+```
 
-## Rules
+Runs your team on any CSV and writes `bank-export.clean.csv` beside it. No grading, no golden
+file. This is the tool you keep after the fight. Prompts that know about dates, vendors and
+categories will need editing for other shapes of data, which is the point.
 
-Four digits from 1 to 6, repeats allowed. Ten guesses max. Sixty seconds per reply, and a
-reply with no valid guess in it burns a guess. Both fighters play the same secret each
-round, one after the other so the machine is not shared. Fewer guesses wins the round. When
-neither cracks it, the fighter whose best guess got closer wins (most exact digits, then
-most right digits in any position). Only a real tie comes down to speed. Twenty rounds. The secrets come from a seed printed on the
-card, so `SEED=12345 make fight` replays the same codes against a different pair.
+## Rules and scoring
 
-Everything is tunable in `.env`: `ROUNDS`, `SEED`, `MAX_GUESSES`, `TIMEOUT_SECONDS`,
-`MAX_TOKENS`. Twist the game itself with `CODE_LENGTH` and `MAX_DIGIT` (classic is 4 and 6;
-`CODE_LENGTH=3 MAX_DIGIT=4` is a 64-code warm-up, `CODE_LENGTH=5 MAX_DIGIT=8` is brutal). The
-card records whatever you played.
+The messy file is generated from a seed: 50 synthetic transaction rows by default (`ROWS=` for more) (id, date, vendor, amount,
+category, note) with five date formats, random casing and spacing, currency symbols, category
+synonyms, exact and near duplicates, blanks, curly quotes, swapped columns, and junk rows
+(repeated headers, a TOTAL row, dashes). `PRESET=easy|medium|brutal` sets the rates.
+
+Score is cell accuracy against the golden file, by id. A duplicate kept scores that id at zero. A
+real row dropped scores zero. A junk row kept costs a full row. One number, plus per-column accuracy
+so you can see where a team fails.
+
+The headline is the delta: your team minus the stock team, same file, same machine. Raw scores are
+not comparable across machines, and the card does not pretend they are. `SEED=12345 make fight`
+replays the exact file. `ROWS`, `PRESET`, `TEAM`, `STOCK`, `TIMEOUT_SECONDS` are all in `.env`.
+
+## Judging
+
+Out of 100, scored from the card, the team file, the log and your write-up:
+
+| Criterion | Points | What judges look for |
+|---|---|---|
+| Beat the stock team | 30 | The delta on your machine, and whether it holds on a second seed |
+| Architecture story | 25 | Why this split. The log should show the stages mattered |
+| Pound for pound | 20 | Accuracy per GB of model weights, and seconds |
+| Show and tell | 15 | A write-up, post or 60-second video worth sharing |
+| Friction log | 10 | Three specific things that slowed you down |
+
+The scoring seed is announced when submissions close. The top five team files are rerun live on
+the host machine for the bracket, so a bracket team has to fit in 16 GB.
+
+## Stretch goals
+
+- **Frontier through the same gateway.** With an [otari.ai](https://otari.ai) key in `.env` as
+  `OTARI_AI_KEY`, any stage can use `model: otari-ai:openai/gpt-oss-120b`. Same team file, same
+  referee, same dashboard. Those requests cost money, and the card's "rows processed locally"
+  drops below 100%, which judges will notice. Hosted reasoning models spend the per-request token
+  budget thinking, so check the "broken rows" column before you trust a hosted stage. The interesting version is a stage that touches
+  no rows at all: a coach that reads the scores and rewrites a prompt. Not built yet; that is
+  round two.
+- **Connectors.** A Sheets export or a bank download is a CSV. If you wire a real source up,
+  show it in the video.
 
 ## Submit
 
-Fill in [SUBMISSION.md](SUBMISSION.md): fight card, strategy file, three friction bullets,
-and a link to your write-up or 60-second video.
+Fill in [SUBMISSION.md](SUBMISSION.md): fight card, team file and prompts, three friction bullets,
+and a link to your write-up or video.
 
 ## How it is wired
 
 ```
 fight.py ──► Otari (Docker, :8000) ──► Ollama (host, :11434)
-   │             two aliases, two scoped keys
-   └── referee: holds the secret, scores, times, writes the card
+   │             one scoped key per team          └─► otari.ai (optional, hosted provider)
+   └── referee: makes the messy file, runs stock then yours, grades, writes the card
 ```
 
 - `docker-compose.yml` runs Otari and points it at the host's Ollama.
-- `otari.yml` declares the `ollama` hosted provider, aliases `fighter-a` / `fighter-b`,
-  and one scoped API key per fighter. You should never need to edit it.
-- `fightnight/referee.py` plays the game. `fightnight/game.py` is the rules, with tests.
-- `fightnight/otari.py` is the only code that talks to Otari: chat through the fighter
-  keys, and one admin step before round one that switches the models on under the
-  provider, because a hosted provider from config starts with an empty roster.
+- `otari.yml` declares the `ollama` hosted provider and the two scoped keys. You should never
+  need to edit it.
+- `fightnight/corrupt.py` makes golden and messy files. `fightnight/grade.py` scores. Both plain
+  code, both tested.
+- `fightnight/pipeline.py` runs a team file. `fightnight/team.py` validates one.
+- `fightnight/otari.py` is the only code that talks to Otari: chat through the team keys, and
+  an admin step before a fight that switches the models on under the provider, because a hosted
+  provider declared in config starts with an empty roster. Every response's `otari-provider`
+  header is what the local share is computed from.
 - `fightnight/card.py` builds the card, pulling per-key usage from
   `GET /api/v1/key/usage/summary`.
 
 ## Troubleshooting
 
-- **Ollama is not answering**: start it. `ollama serve` or open the app. On Linux make
-  sure it listens on `0.0.0.0` or that Docker can reach `host.docker.internal`.
-- **Otari did not answer within 60s**: `docker compose logs otari`. A bad `.env` (missing
-  key) stops it at startup.
-- **424 provider_not_configured**: the model is not switched on in Otari. `make fight`
-  does this for you, so run it rather than calling the API by hand.
-- **Fresh start**: `make clean` removes the containers, the Otari database and the cards.
-  Delete `.env` too if you want new keys.
+- **Ollama is not answering**: start it. `ollama serve` or open the app. On Linux make sure Docker
+  can reach `host.docker.internal` (compose maps it to the host gateway).
+- **Otari did not answer within 60s**: `docker compose logs otari`. A bad `.env` stops it at
+  startup.
+- **424 provider_not_configured**: the model is not switched on in Otari. `make fight` does this
+  for you, so run it rather than calling the API by hand.
+- **Slow**: 3B models write about one row per second. `ROWS=20` for iteration, bigger batches for
+  fewer round trips, smaller batches when a model loses rows.
+- **Fresh start**: `make reset` removes the containers, the Otari database, the generated data
+  and the cards. Delete `.env` too if you want new keys.
 
 ## Tests
 
@@ -133,7 +217,7 @@ fight.py ──► Otari (Docker, :8000) ──► Ollama (host, :11434)
 make test
 ```
 
-Covers the scorer, the guess parser and round comparison. No model needed.
+Generator, grader, team loader, pipeline (with a fake gateway), card. No model needed.
 
 ## License
 

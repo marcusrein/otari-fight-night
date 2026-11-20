@@ -73,7 +73,7 @@ class Settings:
             ollama_url=get("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
             team_path=Path(get("TEAM", "team.yml")),
             stock_path=Path(get("STOCK", "teams/stock.yml")),
-            rows=int(get("ROWS", "100")),
+            rows=int(get("ROWS", "50")),
             preset=get("PRESET", "medium"),
             seed=int(seed_raw) if seed_raw else None,
             timeout_seconds=float(get("TIMEOUT_SECONDS", "120")),

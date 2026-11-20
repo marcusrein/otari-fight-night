@@ -46,3 +46,10 @@ def test_render_has_stage_table_and_no_None():
 def test_render_marks_stock_win():
     md = render_md(build(_fight(team_acc=0.5, stock_acc=0.6), {"os": "t", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"}))
     assert "-10.0" in md and "stock" in md.lower()
+
+
+def test_render_shows_small_hosted_costs():
+    from fightnight.card import _usd
+    assert _usd(0) == "$0.00" and _usd(None) == "$0.00"
+    assert _usd(0.000773) == "$0.0008"
+    assert _usd(1.5) == "$1.50"

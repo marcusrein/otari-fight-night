@@ -131,7 +131,7 @@ Stage types:
 Stages run in file order. Rows carry through every stage. Prompts are markdown files;
 `{sample}` in a prompt is replaced by the shipped sample rows. Any model string is passed
 to Otari as `ollama:<model>` unless it already contains a provider prefix, so
-`otari-ai:openai/gpt-4o-mini` works and shows up as non-local.
+`otari-ai:openai/gpt-oss-120b` works and shows up as non-local (otari.ai lists open-weight models, not gpt-4o-mini).
 
 ### Otari
 

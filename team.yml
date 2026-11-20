@@ -9,7 +9,7 @@
 #   verify  one model re-checks rows against the clean sample; `retry` re-sends rows it flags.
 #
 # Any Ollama model name works (it is pulled if missing). A model written as
-# otari-ai:<vendor>/<model> goes to otari.ai through the same gateway, costs money, and
+# otari-ai:<vendor>/<model> (for example otari-ai:openai/gpt-oss-120b) goes to otari.ai through the same gateway, costs money, and
 # the fight card marks those rows as not processed locally.
 #
 # Prompts are markdown files; {sample} inside one is replaced by 20 clean reference rows.
