@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20T17:26:12+00:00",
+  "generated_at": "2026-11-20T17:41:22+00:00",
   "game": {
     "name": "Codebreaker",
     "code_length": 4,
@@ -10,7 +10,7 @@
     "max_tokens": 300,
     "seed": 810218
   },
-  "strategy_sha256": "935d8143edb2",
+  "strategy_sha256": "07331cf912c0",
   "machine": {
     "os": "macOS 26.5.2",
     "arch": "arm64",
@@ -30,22 +30,22 @@
       "corner": "A",
       "model": "llama3.2:3b",
       "otari_alias": "fighter-a",
-      "wins": 2,
-      "losses": 18,
+      "wins": 3,
+      "losses": 17,
       "ties": 0,
-      "cracked": 1,
-      "avg_guesses": 10.55,
-      "avg_guesses_when_cracked": 2,
-      "avg_seconds_per_guess": 0.46,
-      "total_seconds": 89.2,
+      "cracked": 0,
+      "avg_guesses": 11,
+      "avg_guesses_when_cracked": null,
+      "avg_seconds_per_guess": 0.35,
+      "total_seconds": 70.8,
       "malformed_replies": 0,
       "timeouts": 0,
       "otari_usage": {
-        "requests": 192,
+        "requests": 200,
         "errors": 0,
-        "prompt_tokens": 73566,
-        "completion_tokens": 4453,
-        "avg_gateway_latency_ms": 445,
+        "prompt_tokens": 73779,
+        "completion_tokens": 3109,
+        "avg_gateway_latency_ms": 334,
         "cost_usd": 0.0
       }
     },
@@ -53,29 +53,29 @@
       "corner": "B",
       "model": "qwen2.5:3b",
       "otari_alias": "fighter-b",
-      "wins": 18,
-      "losses": 2,
+      "wins": 17,
+      "losses": 3,
       "ties": 0,
       "cracked": 0,
       "avg_guesses": 11,
       "avg_guesses_when_cracked": null,
-      "avg_seconds_per_guess": 0.25,
-      "total_seconds": 49.4,
-      "malformed_replies": 0,
+      "avg_seconds_per_guess": 0.22,
+      "total_seconds": 44.4,
+      "malformed_replies": 1,
       "timeouts": 0,
       "otari_usage": {
         "requests": 200,
         "errors": 0,
-        "prompt_tokens": 62500,
+        "prompt_tokens": 64700,
         "completion_tokens": 1000,
-        "avg_gateway_latency_ms": 230,
+        "avg_gateway_latency_ms": 203,
         "cost_usd": 0.0
       }
     }
   ],
   "result": {
     "winner": "B (qwen2.5:3b)",
-    "record": "A 2 - 18 B"
+    "record": "A 3 - 17 B"
   },
   "rounds": [
     {
@@ -84,14 +84,18 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 11.0
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 4.1
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 2.1
       },
-      "winner": "b"
+      "winner": "a"
     },
     {
       "n": 2,
@@ -99,14 +103,18 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 4.5
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 8.5
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.2
       },
-      "winner": "a"
+      "winner": "b"
     },
     {
       "n": 3,
@@ -114,12 +122,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 4.2
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.0
+        "best_exact": 2,
+        "best_misplaced": 2,
+        "seconds": 2.1
       },
       "winner": "b"
     },
@@ -129,12 +141,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.2
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 3.4
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 1.9
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.1
       },
       "winner": "b"
     },
@@ -142,16 +158,20 @@
       "n": 5,
       "secret": "1245",
       "a": {
-        "score": 2,
-        "cracked": true,
-        "seconds": 0.9
+        "score": 11,
+        "cracked": false,
+        "best_exact": 1,
+        "best_misplaced": 3,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 1.9
+        "best_exact": 2,
+        "best_misplaced": 1,
+        "seconds": 2.1
       },
-      "winner": "a"
+      "winner": "b"
     },
     {
       "n": 6,
@@ -159,12 +179,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 4.4
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 3.5
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.0
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.5
       },
       "winner": "b"
     },
@@ -174,12 +198,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 3.6
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 3.9
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.0
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 2.2
       },
       "winner": "b"
     },
@@ -189,12 +217,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 3.5
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 3.1
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.3
       },
       "winner": "b"
     },
@@ -204,12 +236,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 3.7
+        "best_exact": 2,
+        "best_misplaced": 1,
+        "seconds": 3.4
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 2.4
       },
       "winner": "b"
     },
@@ -219,12 +255,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 7.8
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 3.3
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 2.3
       },
       "winner": "b"
     },
@@ -234,12 +274,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.2
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 3.6
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.2
       },
       "winner": "b"
     },
@@ -249,12 +293,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 3.5
+        "best_exact": 1,
+        "best_misplaced": 2,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 2.2
       },
       "winner": "b"
     },
@@ -264,11 +312,15 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 4.0
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 3.3
       },
       "b": {
         "score": 11,
         "cracked": false,
+        "best_exact": 2,
+        "best_misplaced": 0,
         "seconds": 2.2
       },
       "winner": "b"
@@ -279,12 +331,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 6.5
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 4.7
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.0
+        "best_exact": 1,
+        "best_misplaced": 1,
+        "seconds": 2.2
       },
       "winner": "b"
     },
@@ -294,12 +350,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 8.1
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.3
       },
       "winner": "b"
     },
@@ -309,14 +369,18 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.2
+        "best_exact": 2,
+        "best_misplaced": 1,
+        "seconds": 3.4
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 1.9
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.1
       },
-      "winner": "b"
+      "winner": "a"
     },
     {
       "n": 17,
@@ -324,12 +388,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 5.4
+        "best_exact": 0,
+        "best_misplaced": 2,
+        "seconds": 3.1
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.0
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 2.2
       },
       "winner": "b"
     },
@@ -339,14 +407,18 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 4.3
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 3.9
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.1
+        "best_exact": 2,
+        "best_misplaced": 1,
+        "seconds": 2.2
       },
-      "winner": "b"
+      "winner": "a"
     },
     {
       "n": 19,
@@ -354,11 +426,15 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 3.9
+        "best_exact": 2,
+        "best_misplaced": 0,
+        "seconds": 3.2
       },
       "b": {
         "score": 11,
         "cracked": false,
+        "best_exact": 2,
+        "best_misplaced": 0,
         "seconds": 2.1
       },
       "winner": "b"
@@ -369,12 +445,16 @@
       "a": {
         "score": 11,
         "cracked": false,
-        "seconds": 3.5
+        "best_exact": 1,
+        "best_misplaced": 0,
+        "seconds": 5.9
       },
       "b": {
         "score": 11,
         "cracked": false,
-        "seconds": 2.0
+        "best_exact": 3,
+        "best_misplaced": 0,
+        "seconds": 2.3
       },
       "winner": "b"
     }

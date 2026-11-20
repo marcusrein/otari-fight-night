@@ -9,8 +9,8 @@ machine and nothing costs money.
 
 ```
 Round 7/20  (secret 3516)
-  A llama3.2:3b        1234(1/1) 3516(4/0)  cracked in 2, 3.1s
-  B qwen2.5:3b         1234(1/1) 1356(2/2) 3516(4/0)  cracked in 3, 4.0s
+  A llama3.2:3b        1234(1/1) 1356(2/2) 3516(4/0)  cracked in 3, 1.4s
+  B qwen2.5:3b         1221(1/0) 2321(1/1) 1331(2/0) 4331(1/0) 1431(1/1) 2431(1/1) 1241(1/0) 3241(1/2) 1341(1/0) 2341(1/1)  failed, best 2/0, 2.5s
   -> A wins   [A 4 - 3 B]
 ```
 
@@ -78,8 +78,9 @@ about digits. Try them, but that is your experiment, not the default.
 
 Four digits from 1 to 6, repeats allowed. Ten guesses max. Sixty seconds per reply, and a
 reply with no valid guess in it burns a guess. Both fighters play the same secret each
-round, one after the other so the machine is not shared. Fewer guesses wins the round,
-faster total time breaks ties. Twenty rounds. The secrets come from a seed printed on the
+round, one after the other so the machine is not shared. Fewer guesses wins the round. When
+neither cracks it, the fighter whose best guess got closer wins (most exact digits, then
+most right digits in any position). Only a real tie comes down to speed. Twenty rounds. The secrets come from a seed printed on the
 card, so `SEED=12345 make fight` replays the same codes against a different pair.
 
 Everything is tunable in `.env`: `ROUNDS`, `SEED`, `MAX_GUESSES`, `TIMEOUT_SECONDS`,

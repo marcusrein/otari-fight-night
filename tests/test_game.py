@@ -4,6 +4,7 @@ from fightnight.game import (
     CODE_LENGTH,
     DIGITS,
     Rules,
+    closeness,
     compare_rounds,
     make_secret,
     parse_guess,
@@ -66,15 +67,31 @@ def test_make_secret_is_seeded_and_in_range():
     assert all(d in DIGITS for d in a)
 
 
+FULL = (4, 4)
+
+
 def test_compare_rounds_fewer_guesses_wins():
-    assert compare_rounds((3, 10.0), (5, 2.0)) == "a"
-    assert compare_rounds((6, 1.0), (4, 9.0)) == "b"
+    assert compare_rounds((3, FULL, 10.0), (5, FULL, 2.0)) == "a"
+    assert compare_rounds((6, FULL, 1.0), (4, FULL, 9.0)) == "b"
+    # a crack beats a near miss however fast the miss was
+    assert compare_rounds((10, FULL, 30.0), (11, (3, 4), 1.0)) == "a"
 
 
-def test_compare_rounds_speed_breaks_ties():
-    assert compare_rounds((4, 3.2), (4, 3.9)) == "a"
-    assert compare_rounds((4, 5.0), (4, 4.0)) == "b"
-    assert compare_rounds((4, 5.0), (4, 5.0)) == "tie"
+def test_compare_rounds_closeness_before_speed_when_both_fail():
+    assert compare_rounds((11, (2, 3), 9.0), (11, (1, 4), 1.0)) == "a"  # more exact wins
+    assert compare_rounds((11, (1, 2), 9.0), (11, (1, 4), 1.0)) == "b"  # same exact, more right digits wins
+
+
+def test_compare_rounds_speed_breaks_real_ties():
+    assert compare_rounds((4, FULL, 3.2), (4, FULL, 3.9)) == "a"
+    assert compare_rounds((11, (1, 3), 5.0), (11, (1, 3), 4.0)) == "b"
+    assert compare_rounds((4, FULL, 5.0), (4, FULL, 5.0)) == "tie"
+
+
+def test_closeness_is_best_exact_then_best_total():
+    assert closeness([]) == (0, 0)
+    assert closeness([(0, 4), (2, 0), (1, 2)]) == (2, 2)
+    assert closeness([(1, 3), (1, 1), (0, 4)]) == (1, 4)
 
 
 def test_custom_rules_three_digits_one_to_four():

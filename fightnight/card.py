@@ -62,7 +62,7 @@ def build(rounds, a, b, usage_a, usage_b, specs, gateway, seed, settings, strate
         "gateway": gateway,
         "fighters": [fa, fb],
         "result": {"winner": winner, "record": f"A {fa['wins']} - {fb['wins']} B" + (f" ({fa['ties']} tied)" if fa["ties"] else "")},
-        "rounds": [{"n": r.n, "secret": fmt(r.secret), "a": {"score": r.a.score, "cracked": r.a.cracked, "seconds": round(r.a.seconds, 1)}, "b": {"score": r.b.score, "cracked": r.b.cracked, "seconds": round(r.b.seconds, 1)}, "winner": r.winner} for r in rounds],
+        "rounds": [{"n": r.n, "secret": fmt(r.secret), "a": _play_row(r.a), "b": _play_row(r.b), "winner": r.winner} for r in rounds],
     }
 
 
@@ -70,8 +70,18 @@ def _na(v):
     return "n/a" if v is None else v
 
 
+def _play_row(p) -> dict:
+    return {"score": p.score, "cracked": p.cracked, "best_exact": p.best[0], "best_misplaced": p.best[1] - p.best[0], "seconds": round(p.seconds, 1)}
+
+
 def _row(label, fa, fb, key, f=lambda v: v):
     return f"| {label} | {_na(f(fa[key]))} | {_na(f(fb[key]))} |"
+
+
+def _round_cell(p: dict) -> str:
+    if p["cracked"]:
+        return f"{p['score']} ({p['seconds']}s)"
+    return f"fail, best {p['best_exact']}/{p['best_misplaced']} ({p['seconds']}s)"
 
 
 def render_md(card: dict) -> str:
@@ -120,7 +130,7 @@ def render_md(card: dict) -> str:
         "",
         "## Rules",
         "",
-        f"{g['code_length']} digits from {g['digits']}, repeats allowed, {g['max_guesses']} guesses max, {g['timeout_seconds']:.0f}s per reply, {g['max_tokens']} max tokens. Same secret for both fighters each round, played one after the other. Fewer guesses wins the round, faster total time breaks ties.",
+        f"{g['code_length']} digits from {g['digits']}, repeats allowed, {g['max_guesses']} guesses max, {g['timeout_seconds']:.0f}s per reply, {g['max_tokens']} max tokens. Same secret for both fighters each round, played one after the other. Fewer guesses wins the round. If neither cracks it, the closer best guess wins (most exact, then most right digits). Only then does speed decide.",
         "",
         f"Seed `{g['seed']}` (replay with `SEED={g['seed']} make fight`). Strategy file sha256 `{card['strategy_sha256']}`.",
         "",
@@ -130,8 +140,8 @@ def render_md(card: dict) -> str:
         "|---|---|---|---|---|",
     ]
     for r in card["rounds"]:
-        sa = f"{r['a']['score']} ({r['a']['seconds']}s)" if r["a"]["cracked"] else f"fail ({r['a']['seconds']}s)"
-        sb = f"{r['b']['score']} ({r['b']['seconds']}s)" if r["b"]["cracked"] else f"fail ({r['b']['seconds']}s)"
+        sa = _round_cell(r["a"])
+        sb = _round_cell(r["b"])
         lines.append(f"| {r['n']} | {r['secret']} | {sa} | {sb} | {r['winner'].upper() if r['winner'] != 'tie' else 'tie'} |")
     lines.append("")
     return "\n".join(lines)

@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 
 from .config import Settings
-from .game import Rules, compare_rounds, make_secret, parse_guess, score
+from .game import Closeness, Rules, closeness, compare_rounds, make_secret, parse_guess, score
 from .otari import Otari, OtariError
 
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
@@ -48,6 +48,11 @@ class Play:
     score: int
     seconds: float
     guesses: list[Guess] = field(default_factory=list)
+
+    @property
+    def best(self) -> Closeness:
+        """(exact, exact + misplaced) of the best guess this round."""
+        return closeness([(g.exact, g.misplaced) for g in self.guesses if g.exact is not None])
 
     @property
     def malformed(self) -> int:
@@ -131,7 +136,7 @@ def describe(play: Play) -> str:
             parts.append("BAD")
         else:
             parts.append(f"{fmt(g.guess)}({g.exact}/{g.misplaced})")
-    tail = f"cracked in {play.score}" if play.cracked else "failed"
+    tail = f"cracked in {play.score}" if play.cracked else f"failed, best {play.best[0]}/{play.best[1] - play.best[0]}"
     return f"{' '.join(parts)}  {tail}, {play.seconds:.1f}s"
 
 
@@ -155,7 +160,7 @@ def run_fight(otari: Otari, a: Fighter, b: Fighter, strategy: str, s: Settings, 
             print(f"  A {a.model:<18} {describe(pa)}")
             pb = play_round(otari, b, secret, strategy, s, log)
             print(f"  B {b.model:<18} {describe(pb)}")
-            winner = compare_rounds((pa.score, pa.seconds), (pb.score, pb.seconds))
+            winner = compare_rounds((pa.score, pa.best, pa.seconds), (pb.score, pb.best, pb.seconds))
             wins[winner] += 1
             verdict = {"a": f"A wins", "b": f"B wins", "tie": "tie"}[winner]
             print(f"  -> {verdict}   [A {wins['a']} - {wins['b']} B" + (f", {wins['tie']} tied" if wins["tie"] else "") + "]")

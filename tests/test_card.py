@@ -36,6 +36,12 @@ def test_build_counts_wins_and_cracks():
     assert card["result"]["winner"].startswith("A")
 
 
+def test_render_shows_closeness_on_failed_rounds():
+    md = render_md(_card(cracked_a=False))
+    assert "fail, best 1/0" in md
+    assert "closer best guess wins" in md
+
+
 def test_render_handles_missing_values_and_cost():
     md = render_md(_card(cracked_a=False))
     assert "| Avg guesses when cracked | n/a | n/a |" in md

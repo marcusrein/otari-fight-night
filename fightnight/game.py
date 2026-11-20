@@ -57,10 +57,26 @@ def parse_guess(text: str, rules: Rules = CLASSIC) -> list[int] | None:
     return [int(c) for c in matches[-1] if c.isdigit()]
 
 
-def compare_rounds(a: tuple[int, float], b: tuple[int, float]) -> str:
-    """Decide a round from (score, seconds) per fighter. Lower score wins, then faster time."""
+Closeness = tuple[int, int]  # (exact, exact + misplaced) of a fighter's best guess
+
+
+def closeness(feedback: list[tuple[int, int]]) -> Closeness:
+    """The best a fighter got in a round: most exact digits, then most digits right at all."""
+    if not feedback:
+        return (0, 0)
+    return max((e, e + m) for e, m in feedback)
+
+
+def compare_rounds(a: tuple[int, Closeness, float], b: tuple[int, Closeness, float]) -> str:
+    """Decide a round from (score, closeness, seconds) per fighter.
+
+    Fewer guesses wins. When neither cracked it (or both took the same number),
+    the fighter that got closer wins. Only then does speed decide.
+    """
     if a[0] != b[0]:
         return "a" if a[0] < b[0] else "b"
     if a[1] != b[1]:
-        return "a" if a[1] < b[1] else "b"
+        return "a" if a[1] > b[1] else "b"
+    if a[2] != b[2]:
+        return "a" if a[2] < b[2] else "b"
     return "tie"
