@@ -13,7 +13,8 @@ def _team(name, model):
 
 
 def _result(name, model, acc, local=1.0, cracked_cols=None):
-    grade = Grade(accuracy=acc, per_column={"date": acc, "vendor": acc, "amount": acc, "category": acc, "note": acc}, dup_kept=1, dropped=2, junk_kept=0, rows_out=298)
+    pct = round(acc * 100, 1)
+    grade = Grade(repair_pct=pct, problems=200, fixed=int(acc * 200), broken=3, accuracy=acc, per_column={"date": pct, "vendor": pct, "amount": pct, "category": pct, "note": pct}, dup_kept=1, dropped=2, junk_kept=0, rows_out=298)
     stats = [StageStats("clean", model, requests=30, rows=300, seconds=40.0, unparsed=3, prompt_tokens=1000, completion_tokens=500, local_requests=int(30 * local))]
     usage = {"totals": {"request_count": 30, "error_count": 0, "prompt_tokens": 1000, "completion_tokens": 500, "avg_latency_ms": 1333.3, "cost": 0.0}}
     return TeamResult(team=_team(name, model), grade=grade, stages=stats, seconds=40.0, requests=30, local_share=local, weights_gb=1.9, usage=usage)
@@ -27,9 +28,10 @@ def test_card_delta_and_local_share():
     card = build(_fight(), {"os": "testOS", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"})
     assert card["result"]["delta_points"] == 21.0
     assert card["result"]["winner"] == "my-team"
-    assert card["team"]["accuracy_pct"] == 82.0 and card["stock"]["accuracy_pct"] == 61.0
-    assert card["team"]["accuracy_per_gb"] == round(82.0 / 1.9, 1)
-    assert card["team"]["local_share_pct"] == 100.0
+    assert card["team"]["repair_pct"] == 82.0 and card["stock"]["repair_pct"] == 61.0
+    assert card["team"]["repair_per_gb"] == round(82.0 / 1.9, 1)
+    assert card["team"]["local_requests_pct"] == 100.0
+    assert card["team"]["problems"] == 200 and card["team"]["broken"] == 3
     assert card["dataset"] == {"seed": 42, "preset": "medium", "rows": 300, "messy_rows": 340, "sha256": "feedbeef"}
     assert card["team"]["sha256"] == "abc123def456"
 
@@ -39,7 +41,8 @@ def test_render_has_stage_table_and_no_None():
     assert "None" not in md
     assert "| clean | llama3.2:3b | 30 | 300 | 40.0 | 3 |" in md
     assert "+21.0" in md
-    assert "50%" in md  # local share
+    assert "50%" in md  # local requests
+    assert "Repair rate per column, stock" in md and "Repair rate per column, yours" in md
     assert "SEED=42" in md
 
 

@@ -11,14 +11,18 @@ from .referee import FightResult, TeamResult
 
 def _side(r: TeamResult) -> dict:
     totals = r.usage.get("totals", {}) if r.usage else {}
-    acc = round(r.grade.accuracy * 100, 1)
+    score = r.grade.repair_pct
     return {
         "name": r.team.name,
         "file": str(r.team.path),
         "sha256": r.team.sha256,
         "models": r.team.models(),
-        "accuracy_pct": acc,
-        "per_column_pct": {k: round(v * 100, 1) for k, v in r.grade.per_column.items()},
+        "repair_pct": score,
+        "problems": r.grade.problems,
+        "fixed": r.grade.fixed,
+        "broken": r.grade.broken,
+        "accuracy_pct": round(r.grade.accuracy * 100, 1),
+        "per_column_repair_pct": dict(r.grade.per_column),
         "dup_kept": r.grade.dup_kept,
         "dropped": r.grade.dropped,
         "junk_kept": r.grade.junk_kept,
@@ -28,8 +32,8 @@ def _side(r: TeamResult) -> dict:
         "unparsed_rows": sum(s.unparsed for s in r.stages),
         "refused_drops": sum(s.refused_drops for s in r.stages),
         "weights_gb": r.weights_gb,
-        "accuracy_per_gb": round(acc / r.weights_gb, 1) if r.weights_gb else None,
-        "local_share_pct": round(r.local_share * 100, 1),
+        "repair_per_gb": round(score / r.weights_gb, 1) if r.weights_gb else None,
+        "local_requests_pct": round(r.local_share * 100, 1),
         "otari_usage": {
             "requests": totals.get("request_count"),
             "errors": totals.get("error_count"),
@@ -44,7 +48,7 @@ def _side(r: TeamResult) -> dict:
 
 def build(result: FightResult, specs: dict, gateway: dict) -> dict:
     team, stock = _side(result.team), _side(result.stock)
-    delta = round(team["accuracy_pct"] - stock["accuracy_pct"], 1)
+    delta = round(team["repair_pct"] - stock["repair_pct"], 1)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "dataset": {"seed": result.seed, "preset": result.preset, "rows": result.rows, "messy_rows": result.messy_rows, "sha256": result.dataset_sha},
@@ -78,7 +82,9 @@ def render_md(card: dict) -> str:
     lines = [
         "# Fight card: Otari Fight Night",
         "",
-        f"{headline}: {t['accuracy_pct']}% vs {s['accuracy_pct']}% cell accuracy on {d['rows']} rows ({d['messy_rows']} messy), preset `{d['preset']}`. Generated {card['generated_at']}.",
+        f"{headline}: net repair {t['repair_pct']}% vs {s['repair_pct']}% on {d['rows']} rows ({d['messy_rows']} messy, {t['problems']} problems), preset `{d['preset']}`. Generated {card['generated_at']}.",
+        "",
+        "Net repair = (problems fixed - clean cells broken) / problems. An untouched file scores 0. Each extra duplicate copy and each junk row is one problem; every cell that differs from the golden file is one problem.",
         "",
         "## Machine",
         "",
@@ -94,7 +100,10 @@ def render_md(card: dict) -> str:
         "|---|---|---|",
         f"| Team file | `{s['file']}` | `{t['file']}` |",
         f"| Models | {', '.join(f'`{x}`' for x in s['models'])} | {', '.join(f'`{x}`' for x in t['models'])} |",
-        f"| Accuracy | {s['accuracy_pct']}% | **{t['accuracy_pct']}%** ({sign}{delta}) |",
+        f"| Net repair | {s['repair_pct']}% | **{t['repair_pct']}%** ({sign}{delta}) |",
+        f"| Problems fixed | {s['fixed']} / {s['problems']} | {t['fixed']} / {t['problems']} |",
+        f"| Clean cells broken | {s['broken']} | {t['broken']} |",
+        f"| Cells exactly right (reference) | {s['accuracy_pct']}% | {t['accuracy_pct']}% |",
         f"| Duplicates kept | {s['dup_kept']} | {t['dup_kept']} |",
         f"| Real rows dropped | {s['dropped']} | {t['dropped']} |",
         f"| Junk rows kept | {s['junk_kept']} | {t['junk_kept']} |",
@@ -103,10 +112,12 @@ def render_md(card: dict) -> str:
         f"| Seconds | {s['seconds']} | {t['seconds']} |",
         f"| Requests | {s['requests']} | {t['requests']} |",
         f"| Model weights loaded | {s['weights_gb']} GB | {t['weights_gb']} GB |",
-        f"| Accuracy per GB | {_na(s['accuracy_per_gb'])} | {_na(t['accuracy_per_gb'])} |",
-        f"| Rows processed locally | {_pct(s['local_share_pct'])} | {_pct(t['local_share_pct'])} |",
+        f"| Net repair per GB | {_na(s['repair_per_gb'])} | {_na(t['repair_per_gb'])} |",
+        f"| Requests served locally | {_pct(s['local_requests_pct'])} | {_pct(t['local_requests_pct'])} |",
         "",
-        "Per column accuracy (yours): " + ", ".join(f"{k} {v}%" for k, v in t["per_column_pct"].items()),
+        "Repair rate per column, stock: " + ", ".join(f"{k} {v}%" for k, v in s["per_column_repair_pct"].items()),
+        "",
+        "Repair rate per column, yours: " + ", ".join(f"{k} {v}%" for k, v in t["per_column_repair_pct"].items()),
         "",
         "## Otari usage (from the gateway's own log, per team key)",
         "",

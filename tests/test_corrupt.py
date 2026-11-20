@@ -39,3 +39,27 @@ def test_csv_roundtrip(tmp_path):
     p = tmp_path / "x.csv"
     write_csv(p, rows, COLUMNS)
     assert read_csv(p) == rows
+
+
+def test_date_corruptions_are_unambiguous():
+    """A d/m/yyyy date only appears when the day is over 12, so every messy date has one right answer."""
+    import datetime
+    golden = make_golden(300, random.Random(11))
+    messy = corrupt(golden, random.Random(12), "brutal")
+    by_id = {r["id"]: r for r in golden}
+    for r in messy:
+        if not r["id"]:
+            continue
+        m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", r["date"])
+        if m and int(m.group(1)) <= 12 and int(m.group(2)) <= 12:
+            a, b, y = m.groups()
+            assert f"{y}-{int(a):02d}-{int(b):02d}" == by_id[r["id"]]["date"], f"{r['date']} is ambiguous"
+
+
+def test_quotes_only_wrap_real_notes():
+    golden = make_golden(300, random.Random(2))
+    messy = corrupt(golden, random.Random(3), "brutal")
+    by_id = {r["id"]: r for r in golden}
+    for r in messy:
+        if r["id"] and r["note"].startswith("\u201c"):
+            assert by_id[r["id"]]["note"] != "", "an empty note must stay recoverable"

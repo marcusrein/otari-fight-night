@@ -115,7 +115,7 @@ def cmd_fight() -> None:
     cardmod.write(card)
     d = card["result"]["delta_points"]
     print()
-    print(f"{card['team']['name']} {card['team']['accuracy_pct']}% vs stock {card['stock']['accuracy_pct']}%: {'+' if d >= 0 else ''}{d} points.")
+    print(f"{card['team']['name']} net repair {card['team']['repair_pct']}% vs stock {card['stock']['repair_pct']}%: {'+' if d >= 0 else ''}{d} points.")
     print("wrote fight-card.md, fight-card.json, fight-log.jsonl and data/{stock,team}.clean.csv")
     print(f"dashboard: {s.otari_url}  (admin key: make keys)")
 

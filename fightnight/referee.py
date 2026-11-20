@@ -82,7 +82,7 @@ def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict
     cleaned, stages = run_team(team, [dict(r) for r in messy], sample, chat, on_call)
     if sys.stdout.isatty():
         print()
-    g = grade(golden, cleaned) if golden else Grade(accuracy=0.0)
+    g = grade(golden, messy, cleaned) if golden else Grade(repair_pct=0.0)
     usage = usage_fn(t0.isoformat(timespec="seconds")) if usage_fn else {}
     return TeamResult(
         team=team,
@@ -110,7 +110,7 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
             usage_fn = (lambda since, k=key: otari.key_usage(k, since)) if otari else None
             r, cleaned = run_one(t, messy, golden, sample, chat_via(otari, key, settings.timeout_seconds), log, sizes, usage_fn, label=label)
             write_csv(DATA_DIR / f"{label}.clean.csv", cleaned, COLUMNS)
-            print(f"  {label} ({t.name}): {r.grade.accuracy * 100:.1f}% in {r.seconds:.0f}s, {r.requests} requests, {r.weights_gb} GB of models, dup kept {r.grade.dup_kept}, dropped {r.grade.dropped}, junk kept {r.grade.junk_kept}")
+            print(f"  {label} ({t.name}): net repair {r.grade.repair_pct}% ({r.grade.fixed}/{r.grade.problems} fixed, {r.grade.broken} broken) in {r.seconds:.0f}s, {r.requests} requests, {r.weights_gb} GB of models, dup kept {r.grade.dup_kept}, dropped {r.grade.dropped}, junk kept {r.grade.junk_kept}")
             results[label] = r
     return FightResult(seed=seed, preset=settings.preset, rows=len(golden), messy_rows=len(messy), dataset_sha=sha, stock=results["stock"], team=results["team"])
 

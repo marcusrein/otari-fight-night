@@ -1,93 +1,104 @@
-"""Score a cleaned CSV against the golden one. Plain code, by id."""
+"""Score a cleaned CSV against the golden one. Plain code, by id.
+
+The headline is net repair: of the cells that were wrong in the messy file (plus each extra
+duplicate copy and each junk row), how many came back right, minus clean cells the team broke,
+as a percentage of the problems. Doing nothing scores 0. Wrecking clean data goes negative.
+Comparison is exact: cleaning means producing the clean form.
+"""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from .corrupt import COLUMNS
 
 SCORED = [c for c in COLUMNS if c != "id"]
-_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y.%m.%d", "%d %b %Y", "%B %d, %Y", "%m/%d/%y", "%Y%m%d", "%b %d, %Y", "%d %B %Y", "%Y/%m/%d"]
-_AMOUNT = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 
 
 @dataclass
 class Grade:
-    accuracy: float
-    per_column: dict[str, float] = field(default_factory=dict)
+    repair_pct: float  # (fixed - broken) / problems * 100
+    problems: int = 0
+    fixed: int = 0
+    broken: int = 0
+    accuracy: float = 0.0  # share of golden cells exactly right in the output, for reference
+    per_column: dict[str, float] = field(default_factory=dict)  # repair rate per column, percent
     dup_kept: int = 0
     dropped: int = 0
     junk_kept: int = 0
     rows_out: int = 0
 
 
-def normalize(col: str, value) -> str:
-    text = " ".join(str(value if value is not None else "").split())
-    if col == "date":
-        for fmt in _DATE_FORMATS:
-            try:
-                return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
-            except ValueError:
-                continue
-        # 14/03/2026 with day first already covered; try swapping when month > 12 fails above
-        return text
-    if col == "amount":
-        m = _AMOUNT.search(text)
-        if m:
-            try:
-                return f"{float(m.group().replace(',', '')):.2f}"
-            except ValueError:
-                return text
-        return text
-    if col == "category":
-        return text.lower()
-    return text
+def _cell(value) -> str:
+    return "" if value is None else str(value)
 
 
-def grade(golden: list[dict], cleaned: list[dict]) -> Grade:
+def _by_id(rows: list[dict]) -> tuple[dict[str, list[dict]], int]:
     by_id: dict[str, list[dict]] = {}
     junk = 0
-    for row in cleaned:
-        if not isinstance(row, dict):
-            junk += 1
-            continue
-        rid = row.get("id")
-        rid = str(rid).strip() if rid is not None else ""
+    for row in rows:
+        rid = _cell(row.get("id")).strip() if isinstance(row, dict) else ""
         if not rid:
             junk += 1
             continue
         by_id.setdefault(rid, []).append(row)
+    return by_id, junk
 
-    total_cells = len(golden) * len(SCORED) + junk * len(SCORED)
-    correct_cells = 0
-    col_correct = {c: 0 for c in SCORED}
+
+def grade(golden: list[dict], messy: list[dict], cleaned: list[dict]) -> Grade:
+    messy_by_id, messy_junk = _by_id(messy)
+    clean_by_id, junk_kept = _by_id(cleaned)
+    golden_ids = {g["id"] for g in golden}
+    junk_kept += sum(len(v) for k, v in clean_by_id.items() if k not in golden_ids)
+
+    problems = fixed = broken = correct = 0
+    col_problems = {c: 0 for c in SCORED}
+    col_fixed = {c: 0 for c in SCORED}
     dup_kept = dropped = 0
-    golden_ids = set()
+
     for g in golden:
-        golden_ids.add(g["id"])
-        rows = by_id.get(g["id"], [])
-        if not rows:
+        before = messy_by_id.get(g["id"], [dict(g)])
+        first = before[0]
+        extra_copies = len(before) - 1
+        problems += extra_copies
+        dirty = {c for c in SCORED if _cell(first.get(c)) != g[c]}
+        problems += len(dirty)
+        for c in dirty:
+            col_problems[c] += 1
+
+        after = clean_by_id.get(g["id"], [])
+        if not after:
             dropped += 1
+            broken += len(SCORED)
             continue
-        if len(rows) > 1:
-            dup_kept += len(rows) - 1
-            continue  # a duplicated id scores zero
-        row = rows[0]
+        kept_extra = len(after) - 1
+        dup_kept += kept_extra
+        fixed += max(0, extra_copies - kept_extra)
+        if kept_extra:
+            continue  # a duplicated id scores no cells
+        row = after[0]
         for c in SCORED:
-            if normalize(c, row.get(c, "")) == normalize(c, g[c]):
-                correct_cells += 1
-                col_correct[c] += 1
-    # rows with ids the golden never had are junk too
-    junk += sum(len(v) for k, v in by_id.items() if k not in golden_ids)
-    total_cells = len(golden) * len(SCORED) + junk * len(SCORED)
-    n = max(len(golden), 1)
+            right = _cell(row.get(c)) == g[c]
+            if right:
+                correct += 1
+            if c in dirty and right:
+                fixed += 1
+                col_fixed[c] += 1
+            elif c not in dirty and not right:
+                broken += 1
+
+    problems += messy_junk
+    fixed += max(0, messy_junk - junk_kept)
+    total_cells = len(golden) * len(SCORED) + junk_kept * len(SCORED)
     return Grade(
-        accuracy=correct_cells / total_cells if total_cells else 0.0,
-        per_column={c: col_correct[c] / n for c in SCORED},
+        repair_pct=round((fixed - broken) / problems * 100, 1) if problems else (100.0 if broken == 0 else -100.0),
+        problems=problems,
+        fixed=fixed,
+        broken=broken,
+        accuracy=correct / total_cells if total_cells else 0.0,
+        per_column={c: round(col_fixed[c] / col_problems[c] * 100, 1) if col_problems[c] else 100.0 for c in SCORED},
         dup_kept=dup_kept,
         dropped=dropped,
-        junk_kept=junk,
+        junk_kept=junk_kept,
         rows_out=len(cleaned),
     )

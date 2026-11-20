@@ -61,12 +61,17 @@ def make_golden(n: int, rng: random.Random) -> list[dict]:
 
 
 def _messy_date(iso: str, rng: random.Random) -> str:
+    """Seven formats. The day-first slash form is used only when the day is over 12, so every
+    messy date has exactly one right reading."""
     y, m, d = iso.split("-")
     mi = int(m)
-    return rng.choice([
-        f"{m}/{d}/{y}", f"{int(d)}/{int(m)}/{y}", f"{y}.{m}.{d}", f"{int(d)} {_MONTHS[mi - 1]} {y}",
+    variants = [
+        f"{m}/{d}/{y}", f"{y}.{m}.{d}", f"{int(d)} {_MONTHS[mi - 1]} {y}",
         f"{_MONTHS_LONG[mi - 1]} {int(d)}, {y}", f"{int(m)}/{int(d)}/{y[2:]}", f"{y}{m}{d}",
-    ])
+    ]
+    if int(d) > 12:
+        variants.append(f"{int(d)}/{int(m)}/{y}")
+    return rng.choice(variants)
 
 
 def _messy_amount(amount: str, rng: random.Random) -> str:
@@ -106,8 +111,8 @@ def corrupt(rows: list[dict], rng: random.Random, preset: str) -> list[dict]:
         if rng.random() < rates["space"]:
             col = rng.choice(["vendor", "note", "category"])
             r[col] = _messy_space(r[col], rng)
-        if rng.random() < rates["quotes"]:
-            r["note"] = f"“{r['note'] or 'n/a'}”"
+        if r["note"].strip() and rng.random() < rates["quotes"]:
+            r["note"] = f"“{r['note']}”"
         if rng.random() < rates["blank"]:
             r[rng.choice(["note", "category"])] = ""
         if rng.random() < rates["swap"]:
