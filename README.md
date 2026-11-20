@@ -5,7 +5,8 @@ Two teams of local models. One messy spreadsheet. One gateway. Whose split of th
 Run [Otari](https://github.com/mozilla-ai/otari) on your own machine as the router in front of a small
 team of Ollama models, point the team at a deliberately terrible CSV, and get a fight card that says
 how your team did against the stock team on the same file, on the same hardware. Nothing leaves your
-machine unless you decide it should, and the card proves it from Otari's own usage log.
+machine unless you decide it should, and the card shows which provider served every request, taken
+from the header Otari stamps on each response.
 
 ```
 Otari Fight Night: CSV cleanup
@@ -107,7 +108,8 @@ stages:
 | `verify` | One model re-checks rows with the clean sample in view. Rows it marks `"flag": true` are re-sent `retry` times. | `model`, `prompt`, `batch`, `retry` |
 
 Prompts are markdown files. `{sample}` in a prompt is replaced by 20 clean reference rows. The
-referee reads the last JSON array in each reply. Things the models cannot do, by design: change an
+referee reads the last JSON array in each reply. The team sha256 on the card covers `team.yml`
+and every prompt it references, so a submission ties to exact prompts. Things the models cannot do, by design: change an
 id, or delete a real row. A `drop` is honored only for a row with no id (junk) or an id another row
 shares (a duplicate). The card counts how often a model tried anyway.
 
@@ -139,15 +141,19 @@ category, note) with seven date formats, random casing and spacing, currency sym
 synonyms, exact and near duplicates, blanks, curly quotes, swapped columns, and junk rows
 (repeated headers, a TOTAL row, dashes). `PRESET=easy|medium|brutal` sets the rates.
 
-Score is net repair: of the problems in the messy file (every cell that differs from the golden
-file, each extra duplicate copy, each junk row), how many the team fixed, minus clean cells it
-broke, as a percentage of the problems. Comparison is exact, so `03/14/2026` is not credit for
-`2026-03-14`. Doing nothing scores 0. Wrecking clean data goes negative. A real row dropped
-counts as five broken cells. The card also shows per-column repair rates for both teams.
+Score is net repair: of the dirty cells in the messy file (every cell that differs from the golden
+file), how many the team fixed, minus clean cells it broke, as a percentage. Comparison is exact,
+so `03/14/2026` is not credit for `2026-03-14`. Doing nothing scores 0. Wrecking clean data goes
+negative. A real row dropped counts as five broken cells, and so does a junk row kept. Removing
+duplicates and junk earns nothing by itself, because the referee can do that whenever a model
+asks; a duplicated id left in the output scores none of its repairs. The card shows per-column
+repair rates for both teams.
 
 The headline is the delta: your team minus the stock team, same file, same machine. Raw scores are
 not comparable across machines, and the card does not pretend they are. `SEED=12345 make fight`
-replays the exact file. `ROWS`, `PRESET`, `TEAM`, `STOCK`, `TIMEOUT_SECONDS` are all in `.env`.
+replays the exact file. `ROWS`, `PRESET`, `TEAM`, `TIMEOUT_SECONDS` are all in `.env`. The stock
+team is always `teams/stock.yml` with its own prompts in `teams/stock/`; the card prints its
+sha256 so judges can see it was the real one.
 
 ## Judging
 
@@ -175,6 +181,22 @@ the host machine for the bracket, so a bracket team has to fit in 16 GB.
   round two.
 - **Connectors.** A Sheets export or a bank download is a CSV. If you wire a real source up,
   show it in the video.
+
+## For organizers
+
+Scores are self-reported and the machines differ, so trust comes from process, not from the card:
+
+- **Fix the scored config** in the announcement: `PRESET=medium`, `ROWS=50`, and the official
+  stock sha256 (print it with `uv run python -c "from fightnight.team import load_team; from pathlib import Path; print(load_team(Path('teams/stock.yml')).sha256)"`). A card with another stock sha is not scored.
+- **Announce the scoring seed when submissions close**, then rerun every contender for the
+  "beat the stock team" points yourself. Cards are markdown and can be edited by hand; the rerun is the check.
+- **Measure the noise first.** Run `TEAM=teams/stock.yml make fight` a few times and publish the
+  stock-vs-stock spread. Only deltas outside that band mean anything.
+- **Models must be plain public Ollama tags.** No `-cloud` tags (they leave the machine through
+  Ollama and still show as local), no custom Modelfiles (not reproducible). A bracket team has
+  to fit in 16 GB.
+- **A hosted stage is allowed, visible, and separate.** The card's "requests served locally"
+  drops below 100%; judge those entries against each other.
 
 ## Submit
 
@@ -206,14 +228,21 @@ fight.py ──► Otari (Docker, :8000) ──► Ollama (host, :11434)
 
 ## Troubleshooting
 
-- **Ollama is not answering**: start it. `ollama serve` or open the app. On Linux make sure Docker
-  can reach `host.docker.internal` (compose maps it to the host gateway).
+- **Ollama is not answering**: start it. `ollama serve` or open the app.
+- **Otari cannot reach Ollama (preflight fails with 424 or a connection error) on Linux**: Ollama
+  listens on 127.0.0.1 by default, which the container cannot see. Run it with
+  `OLLAMA_HOST=0.0.0.0 ollama serve` (or set that in the systemd unit). Compose maps
+  `host.docker.internal` to the host for you. Moved Ollama to another port? Change both
+  `OLLAMA_URL` and `OLLAMA_URL_FROM_DOCKER` in `.env`.
 - **Otari did not answer within 60s**: `docker compose logs otari`. A bad `.env` stops it at
   startup.
 - **424 provider_not_configured**: the model is not switched on in Otari. `make fight` does this
   for you, so run it rather than calling the API by hand.
 - **Slow**: 3B models write about one row per second. `ROWS=20` for iteration, bigger batches for
-  fewer round trips, smaller batches when a model loses rows.
+  fewer round trips, smaller batches when a model loses rows. A request that passes
+  `TIMEOUT_SECONDS` keeps its rows as they were and shows up as a failed request on the card.
+- **Thinking models** (`qwen3`, `deepseek-r1`, hosted `gpt-oss`) spend the per-request token
+  budget reasoning and get cut off. Check the "lost or garbled" column before trusting them.
 - **Fresh start**: `make reset` removes the containers, the Otari database, the generated data
   and the cards. Delete `.env` too if you want new keys.
 
