@@ -38,7 +38,7 @@ class Team:
     name: str
     stages: list[Stage]
     path: Path
-    sha256: str
+    sha256: str  # over the yml text and every prompt file it references, so a card ties to exact prompts
 
     def models(self) -> list[str]:
         seen: list[str] = []
@@ -122,4 +122,8 @@ def load_team(path: Path) -> Team:
                     raise TeamError(f"stage '{s.name}' routes '{value}' to '{target}', which is not a stage")
                 if by_name[target].type == "route":
                     raise TeamError(f"stage '{s.name}' routes '{value}' to '{target}', which is itself a route; route targets must be map, vote or verify stages")
-    return Team(name=str(doc.get("name") or path.stem), stages=stages, path=path, sha256=hashlib.sha256(text.encode()).hexdigest()[:12])
+    digest = hashlib.sha256(text.encode())
+    for st in stages:
+        if st.prompt is not None:
+            digest.update(b"\0" + str(st.prompt.name).encode() + b"\0" + st.prompt.read_bytes())
+    return Team(name=str(doc.get("name") or path.stem), stages=stages, path=path, sha256=digest.hexdigest()[:12])

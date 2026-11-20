@@ -344,3 +344,31 @@ stages:
     assert [r["vendor"] for r in out] == ["V", "fixed"] * 5
     assert [m for m, _ in chat.calls] == ["ollama:t", "ollama:f"]
     assert stats[1].rows == 5
+
+
+def test_missing_provider_header_is_unknown_not_local(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+
+    def chat(model, messages, max_tokens):
+        return ChatResult("[]", 1, 1, 0.1, None, "", "")  # no otari-provider header
+
+    calls = []
+    run_team(team, [dict(r) for r in ROWS], SAMPLE, chat, calls.append)
+    assert calls[0].provider == "unknown" and local_share(calls) == 0.0
+
+
+def test_truncated_array_salvages_complete_rows():
+    text = '[{"id": "a", "x": "1"}, {"id": "b", "x": "2"}, {"id": "c", "x'
+    assert parse_rows(text) == [{"id": "a", "x": "1"}, {"id": "b", "x": "2"}]
+
+
+def test_user_message_asks_for_string_values(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+    seen = {}
+
+    def chat(model, messages, max_tokens):
+        seen["user"] = messages[-1]["content"]
+        return ChatResult("[]", 1, 1, 0.1, None, "ollama", model)
+
+    run_team(team, [dict(r) for r in ROWS], SAMPLE, chat, lambda c: None)
+    assert "every value as a string" in seen["user"]

@@ -30,6 +30,7 @@ def _side(r: TeamResult) -> dict:
         "seconds": r.seconds,
         "requests": r.requests,
         "unparsed_rows": sum(s.unparsed for s in r.stages),
+        "failed_requests": sum(s.failed_requests for s in r.stages),
         "refused_drops": sum(s.refused_drops for s in r.stages),
         "weights_gb": r.weights_gb,
         "repair_per_gb": round(score / r.weights_gb, 1) if r.weights_gb else None,
@@ -42,7 +43,7 @@ def _side(r: TeamResult) -> dict:
             "avg_gateway_latency_ms": round(totals["avg_latency_ms"]) if totals.get("avg_latency_ms") is not None else None,
             "cost_usd": totals.get("cost"),
         },
-        "stages": [{"name": s.name, "model": s.model, "requests": s.requests, "rows": s.rows, "seconds": round(s.seconds, 1), "unparsed": s.unparsed, "local_requests": s.local_requests} for s in r.stages],
+        "stages": [{"name": s.name, "model": s.model, "requests": s.requests, "rows": s.rows, "seconds": round(s.seconds, 1), "unparsed": s.unparsed, "failed_requests": s.failed_requests, "local_requests": s.local_requests} for s in r.stages],
     }
 
 
@@ -84,7 +85,7 @@ def render_md(card: dict) -> str:
         "",
         f"{headline}: net repair {t['repair_pct']}% vs {s['repair_pct']}% on {d['rows']} rows ({d['messy_rows']} messy, {t['problems']} problems), preset `{d['preset']}`. Generated {card['generated_at']}.",
         "",
-        "Net repair = (problems fixed - clean cells broken) / problems. An untouched file scores 0. Each extra duplicate copy and each junk row is one problem; every cell that differs from the golden file is one problem.",
+        "Net repair = (dirty cells fixed - clean cells broken) / dirty cells. An untouched file scores 0. Removing duplicates and junk earns nothing (the referee can do that); keeping them costs.",
         "",
         "## Machine",
         "",
@@ -107,7 +108,8 @@ def render_md(card: dict) -> str:
         f"| Duplicates kept | {s['dup_kept']} | {t['dup_kept']} |",
         f"| Real rows dropped | {s['dropped']} | {t['dropped']} |",
         f"| Junk rows kept | {s['junk_kept']} | {t['junk_kept']} |",
-        f"| Rows the models broke (kept as-is) | {s['unparsed_rows']} | {t['unparsed_rows']} |",
+        f"| Rows a model lost or garbled (kept as-is) | {s['unparsed_rows']} | {t['unparsed_rows']} |",
+        f"| Failed requests (timeouts, gateway errors) | {s['failed_requests']} | {t['failed_requests']} |",
         f"| Real rows a model tried to delete (refused) | {s['refused_drops']} | {t['refused_drops']} |",
         f"| Seconds | {s['seconds']} | {t['seconds']} |",
         f"| Requests | {s['requests']} | {t['requests']} |",
@@ -131,11 +133,11 @@ def render_md(card: dict) -> str:
         "",
         "## Your team, stage by stage",
         "",
-        "| Stage | Model | Requests | Rows | Seconds | Broken rows |",
-        "|---|---|---|---|---|---|",
+        "| Stage | Model | Requests | Rows | Seconds | Rows lost or garbled | Failed requests |",
+        "|---|---|---|---|---|---|---|",
     ]
     for st in t["stages"]:
-        lines.append(f"| {st['name']} | {st['model']} | {st['requests']} | {st['rows']} | {st['seconds']} | {st['unparsed']} |")
+        lines.append(f"| {st['name']} | {st['model']} | {st['requests']} | {st['rows']} | {st['seconds']} | {st['unparsed']} | {st['failed_requests']} |")
     lines += [
         "",
         "## Reproduce",

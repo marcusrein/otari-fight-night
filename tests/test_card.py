@@ -39,7 +39,8 @@ def test_card_delta_and_local_share():
 def test_render_has_stage_table_and_no_None():
     md = render_md(build(_fight(local=0.5), {"os": "t", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, {"otari_url": "u", "otari_version": "v", "ollama_version": "o"}))
     assert "None" not in md
-    assert "| clean | llama3.2:3b | 30 | 300 | 40.0 | 3 |" in md
+    assert "| clean | llama3.2:3b | 30 | 300 | 40.0 | 3 | 0 |" in md
+    assert "Failed requests" in md and "lost or garbled" in md and "Broken rows" not in md
     assert "+21.0" in md
     assert "50%" in md  # local requests
     assert "Repair rate per column, stock" in md and "Repair rate per column, yours" in md

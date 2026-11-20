@@ -1,7 +1,7 @@
 services:
   otari:
     image: mzdotai/otari:0.54.0
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]  # dashboard and keys stay on this machine, not the venue wifi
     env_file: .env
     volumes:
       - ./otari.yml:/app/config.yml:ro

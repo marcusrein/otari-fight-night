@@ -68,13 +68,7 @@ def parse_rows(text: str) -> list[dict] | None:
     """The last JSON array of objects in a reply, fences and prose allowed. A lone object counts as one row."""
     candidates = _ARRAY.findall(text or "")
     if not candidates:
-        m = _OBJECT.search(text or "")
-        if m:
-            try:
-                data = json.loads(m.group())
-                return [data] if isinstance(data, dict) else None
-            except json.JSONDecodeError:
-                return None
+        return _salvage(text or "")
     for raw in reversed(candidates):
         try:
             data = json.loads(raw)
@@ -89,6 +83,23 @@ def parse_rows(text: str) -> list[dict] | None:
         if isinstance(data, list) and data and all(isinstance(x, dict) for x in data):
             return data
     return None
+
+
+_FLAT_OBJECT = re.compile(r"\{[^{}]*\}", re.S)
+
+
+def _salvage(text: str) -> list[dict] | None:
+    """A reply cut off mid-array (token limit) or a lone object: keep every complete flat object."""
+    start = text.rfind("[")
+    rows = []
+    for m in _FLAT_OBJECT.finditer(text[start:] if start >= 0 else text):
+        try:
+            data = json.loads(m.group())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            rows.append(data)
+    return rows or None
 
 
 def local_share(calls: list[Call]) -> float:
@@ -132,7 +143,7 @@ class Runner:
         """One request. Returns (rows after the model, applied flag per row). Rows keep their order and count.
         A timeout or a gateway failure keeps every row as it was and counts the request as failed."""
         public = [_public(r) for r in rows]
-        user = "Rows:\n" + json.dumps(public, ensure_ascii=False) + "\n\nReturn the corrected rows as a JSON array of objects with the same keys" + (extra or "") + "."
+        user = "Rows:\n" + json.dumps(public, ensure_ascii=False) + "\n\nReturn the corrected rows as a JSON array of objects with the same keys and every value as a string" + (extra or "") + "."
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         qualified = qualify_model(model)
         st = self.stat(stage)
@@ -162,7 +173,7 @@ class Runner:
         st.unparsed += unparsed
         st.prompt_tokens += res.prompt_tokens
         st.completion_tokens += res.completion_tokens
-        provider = res.provider or qualified.split(":", 1)[0]
+        provider = res.provider or "unknown"  # no header, no credit: locality is only ever claimed from Otari's own header
         st.local_requests += 1 if provider == "ollama" else 0
         self.on_call(Call(stage.name, model, provider, len(rows), len(parsed) if parsed else 0, res.seconds, res.prompt_tokens, res.completion_tokens, unparsed))
         return merged, applied

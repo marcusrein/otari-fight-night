@@ -125,9 +125,38 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
             usage_fn = (lambda since, k=key: otari.key_usage(k, since)) if otari else None
             r, cleaned = run_one(t, messy, golden, sample, chat_via(otari, key, settings.timeout_seconds), log, sizes, usage_fn, label=label)
             write_csv(DATA_DIR / f"{label}.clean.csv", cleaned, COLUMNS)
-            print(f"  {label} ({t.name}): net repair {r.grade.repair_pct}% ({r.grade.fixed}/{r.grade.problems} fixed, {r.grade.broken} broken) in {r.seconds:.0f}s, {r.requests} requests, {r.weights_gb} GB of models, dup kept {r.grade.dup_kept}, dropped {r.grade.dropped}, junk kept {r.grade.junk_kept}")
+            failed = sum(st.failed_requests for st in r.stages)
+            print(f"  {label} ({t.name}): net repair {r.grade.repair_pct}% ({r.grade.fixed}/{r.grade.problems} fixed, {r.grade.broken} broken) in {r.seconds:.0f}s, {r.requests} requests" + (f", {failed} FAILED" if failed else "") + f", {r.weights_gb} GB of models, dup kept {r.grade.dup_kept}, dropped {r.grade.dropped}, junk kept {r.grade.junk_kept}")
+            if failed:
+                print(f"  warning: {failed} request(s) timed out or failed; those rows were left as they were. Raise TIMEOUT_SECONDS or lower batch sizes.")
             results[label] = r
     return FightResult(seed=seed, preset=settings.preset, rows=len(golden), messy_rows=len(messy), dataset_sha=sha, stock=results["stock"], team=results["team"])
+
+
+def read_any_csv(path: Path) -> tuple[list[dict], list[str], str]:
+    """Read a CSV someone exported from somewhere: BOM, comma or semicolon or tab, UTF-8 or Latin-1.
+    Returns (rows, columns, delimiter). Ragged rows are an error naming the row."""
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+    sample = text[:4096]
+    try:
+        delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+    except csv.Error:
+        delimiter = ","
+    reader = csv.reader(text.splitlines())
+    columns = next(reader, [])
+    if delimiter != ",":
+        reader = csv.reader(text.splitlines(), delimiter=delimiter)
+        columns = next(reader, [])
+    rows = []
+    for n, cells in enumerate(reader, start=2):
+        if len(cells) != len(columns):
+            raise ValueError(f"{path.name} row {n} has {len(cells)} cells but the header has {len(columns)} columns; fix the file first")
+        rows.append(dict(zip(columns, cells)))
+    return rows, columns, delimiter
 
 
 def clean_file(team: Team, path: Path, sample: list[dict], chat, on_call) -> Path:
@@ -137,10 +166,7 @@ def clean_file(team: Team, path: Path, sample: list[dict], chat, on_call) -> Pat
     duplicate rows share one id (so one copy may go), and rows that are a repeated header or
     have no data at all get no id (so they may go as junk). Everything else is a real row.
     """
-    rows = read_csv(path)
-    with path.open(newline="") as f:
-        header = next(csv.reader(f), [])
-    columns = header
+    rows, columns, delimiter = read_any_csv(path)
     had_id = "id" in columns
     if not had_id:
         seen: dict[tuple, str] = {}
@@ -156,5 +182,10 @@ def clean_file(team: Team, path: Path, sample: list[dict], chat, on_call) -> Pat
             r["id"] = seen[cells]
     cleaned, _ = run_team(team, rows, sample, chat, on_call) if rows else ([], [])
     out = path.with_name(path.stem + ".clean.csv")
-    write_csv(out, cleaned, columns if had_id else [c for c in columns if c != "id"])
+    out_columns = columns if had_id else [c for c in columns if c != "id"]
+    with out.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=out_columns, extrasaction="ignore", delimiter=delimiter)
+        w.writeheader()
+        for r in cleaned:
+            w.writerow({c: r.get(c, "") for c in out_columns})
     return out

@@ -9,7 +9,7 @@ require_pricing: false
 # otari.ai, if you set OTARI_AI_KEY in .env, is added at runtime as hosted provider "otari-ai".
 hosted_providers:
   ollama:
-    api_base: http://host.docker.internal:11434
+    api_base: ${OLLAMA_URL_FROM_DOCKER}
 
 # One scoped key per team, so the dashboard and the usage API split every
 # request between the stock team and yours.

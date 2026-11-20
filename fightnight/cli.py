@@ -11,6 +11,7 @@ from . import card as cardmod
 from . import ollama, specs
 from .config import ENV_PATH, ConfigError, Settings, init_env, read_env_file
 from .otari import Otari, OtariError
+from .pipeline import qualify_model
 from .referee import DATA_DIR, chat_via, clean_file, load_sample, make_dataset, run_fight
 from .team import Team, TeamError, load_team
 
@@ -94,6 +95,16 @@ def _prepare(s: Settings, models: list[str]) -> tuple[Otari, dict[str, float], s
     except OtariError as e:
         die(str(e))
     print(f"  Otari {otari_version()} at {s.otari_url}" + (": " + "; ".join(notes) if notes else ", roster ready"))
+    # One tiny request per model through Otari before anything runs: a misconfigured model fails
+    # here, not twelve minutes in, and every model is loaded so neither team gets cold starts.
+    for m in dict.fromkeys(models):
+        try:
+            res = otari.chat(s.key_team, qualify_model(m), [{"role": "user", "content": "Reply with the single word OK."}], 5, s.timeout_seconds)
+        except OtariError as e:
+            die(f"preflight for model '{m}' failed: {e}")
+        except Exception as e:  # httpx errors
+            die(f"preflight for model '{m}' failed: {e}")
+        print(f"  preflight {m}: served by {res.provider or 'unknown'} in {res.seconds:.1f}s")
     return otari, sizes, ollama_version
 
 
@@ -123,7 +134,7 @@ def cmd_fight() -> None:
 def cmd_clean(path_arg: str | None) -> None:
     if not path_arg:
         die("usage: make clean FILE=path/to/your.csv")
-    path = Path(path_arg)
+    path = Path(path_arg).expanduser()
     if not path.exists():
         die(f"{path} not found")
     s = Settings.load()
@@ -137,7 +148,7 @@ def cmd_clean(path_arg: str | None) -> None:
 
     try:
         out = clean_file(team, path, load_sample(), chat_via(otari, s.key_team, s.timeout_seconds), on_call)
-    except OtariError as e:
+    except (OtariError, ValueError) as e:
         die(str(e))
     print(f"wrote {out}")
 

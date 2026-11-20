@@ -23,10 +23,22 @@ def test_untouched_messy_file_scores_zero_and_fixing_everything_scores_full():
         golden = make_golden(50, random.Random(1))
         messy = corrupt(golden, random.Random(2), preset)
         noop = grade(golden, messy, [dict(r) for r in messy])
-        assert noop.repair_pct == 0.0 and noop.fixed == 0 and noop.broken == 0 and noop.problems > 20, preset
+        assert noop.fixed == 0 and noop.problems > 20, preset
         assert noop.dup_kept > 0 or noop.junk_kept > 0
+        assert noop.repair_pct <= 0.0  # junk kept costs, so doing nothing is zero or worse
         perfect = grade(golden, messy, [dict(r) for r in golden])
         assert perfect.repair_pct == 100.0 and perfect.fixed == perfect.problems and perfect.broken == 0
+
+
+def test_dedupe_and_junk_removal_earn_nothing_by_themselves():
+    """Plain code can drop junk and duplicates, so a team gets no credit for it. Keeping them still costs."""
+    golden = make_golden(30, random.Random(4))
+    messy = corrupt(golden, random.Random(5), "medium")
+    only_cleanup = [dict(r) for r in messy if r["id"]]
+    seen = set()
+    only_cleanup = [r for r in only_cleanup if not (r["id"] in seen or seen.add(r["id"]))]
+    g = grade(golden, messy, only_cleanup)
+    assert g.fixed == 0 and g.repair_pct == 0.0 and g.dup_kept == 0 and g.junk_kept == 0
 
 
 def test_breaking_clean_cells_costs_and_can_go_negative():
@@ -60,8 +72,8 @@ def test_grade_duplicate_and_dropped_and_junk():
     cleaned.append(dict(junk))  # junk kept
     g = grade(golden, messy, cleaned)
     assert g.dup_kept == 1 and g.dropped == 1 and g.junk_kept == 1
-    assert g.problems == 3 and g.fixed == 1  # only the id-5 duplicate was removed
-    assert g.broken == 5  # the dropped row's five clean cells
+    assert g.problems == 0 and g.fixed == 0  # no dirty cells; removals earn nothing
+    assert g.broken == 5 + 5  # the dropped row's five clean cells, and a junk row kept
     assert g.accuracy == (8 * 5) / (10 * 5 + 5)
     assert g.rows_out == len(cleaned)
 

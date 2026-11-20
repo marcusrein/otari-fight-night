@@ -89,7 +89,7 @@ class Settings:
             otari_url=get("OTARI_URL", "http://localhost:8000").rstrip("/"),
             ollama_url=get("OLLAMA_URL", "http://localhost:11434").rstrip("/"),
             team_path=Path(get("TEAM", "team.yml")),
-            stock_path=Path(get("STOCK", "teams/stock.yml")),
+            stock_path=Path("teams/stock.yml"),  # fixed on purpose: the baseline is not a knob
             rows=_int(env, "ROWS", "50"),
             preset=preset,
             seed=_int(env, "SEED", "0") if seed_raw else None,

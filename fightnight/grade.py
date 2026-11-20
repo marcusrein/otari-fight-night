@@ -1,9 +1,12 @@
 """Score a cleaned CSV against the golden one. Plain code, by id.
 
-The headline is net repair: of the cells that were wrong in the messy file (plus each extra
-duplicate copy and each junk row), how many came back right, minus clean cells the team broke,
-as a percentage of the problems. Doing nothing scores 0. Wrecking clean data goes negative.
-Comparison is exact: cleaning means producing the clean form.
+The headline is net repair: of the cells that were wrong in the messy file, how many came back
+right, minus clean cells the team broke, as a percentage of the problems. Doing nothing scores
+0. Wrecking clean data goes negative. Comparison is exact: cleaning means producing the clean form.
+
+Removing duplicates and junk earns nothing, because plain code in the referee can do that on a
+model's say-so. Keeping them still costs: a duplicated id scores none of its repairs, and a junk
+row kept counts as a row of broken cells.
 """
 
 from __future__ import annotations
@@ -18,9 +21,9 @@ SCORED = [c for c in COLUMNS if c != "id"]
 @dataclass
 class Grade:
     repair_pct: float  # (fixed - broken) / problems * 100
-    problems: int = 0
-    fixed: int = 0
-    broken: int = 0
+    problems: int = 0  # dirty cells in the messy file
+    fixed: int = 0  # dirty cells now exactly right
+    broken: int = 0  # clean cells now wrong, plus a row's worth per real row dropped or junk row kept
     accuracy: float = 0.0  # share of golden cells exactly right in the output, for reference
     per_column: dict[str, float] = field(default_factory=dict)  # repair rate per column, percent
     dup_kept: int = 0
@@ -59,8 +62,6 @@ def grade(golden: list[dict], messy: list[dict], cleaned: list[dict]) -> Grade:
     for g in golden:
         before = messy_by_id.get(g["id"], [dict(g)])
         first = before[0]
-        extra_copies = len(before) - 1
-        problems += extra_copies
         dirty = {c for c in SCORED if _cell(first.get(c)) != g[c]}
         problems += len(dirty)
         for c in dirty:
@@ -73,9 +74,8 @@ def grade(golden: list[dict], messy: list[dict], cleaned: list[dict]) -> Grade:
             continue
         kept_extra = len(after) - 1
         dup_kept += kept_extra
-        fixed += max(0, extra_copies - kept_extra)
         if kept_extra:
-            continue  # a duplicated id scores no cells
+            continue  # a duplicated id scores no repairs
         row = after[0]
         for c in SCORED:
             right = _cell(row.get(c)) == g[c]
@@ -87,8 +87,7 @@ def grade(golden: list[dict], messy: list[dict], cleaned: list[dict]) -> Grade:
             elif c not in dirty and not right:
                 broken += 1
 
-    problems += messy_junk
-    fixed += max(0, messy_junk - junk_kept)
+    broken += junk_kept * len(SCORED)
     total_cells = len(golden) * len(SCORED) + junk_kept * len(SCORED)
     return Grade(
         repair_pct=round((fixed - broken) / problems * 100, 1) if problems else (100.0 if broken == 0 else -100.0),

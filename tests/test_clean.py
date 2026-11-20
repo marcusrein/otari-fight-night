@@ -59,3 +59,42 @@ def test_clean_file_header_only(tmp_path):
     src.write_text("a,b\n")
     out = clean_file(team, src, sample=[], chat=lambda *a: None, on_call=lambda c: None)
     assert out.read_text() == "a,b\n"
+
+
+def _team(tmp_path):
+    (tmp_path / "prompts").mkdir(exist_ok=True)
+    (tmp_path / "prompts" / "p.md").write_text("clean\n")
+    (tmp_path / "team.yml").write_text("stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+    return load_team(tmp_path / "team.yml")
+
+
+def _echo(model, messages, max_tokens):
+    rows = json.loads(messages[-1]["content"].split("Rows:\n", 1)[1].split("\n\nReturn", 1)[0])
+    return ChatResult(json.dumps(rows), 1, 1, 0.1, None, "ollama", model)
+
+
+def test_clean_file_keeps_semicolon_delimiter_and_decimal_commas(tmp_path):
+    src = tmp_path / "bank.csv"
+    src.write_text("Datum;Betrag;Text\n01.02.2026;5,00;Miete\n")
+    out = clean_file(_team(tmp_path), src, sample=[], chat=_echo, on_call=lambda c: None)
+    assert out.read_text() == "Datum;Betrag;Text\n01.02.2026;5,00;Miete\n"
+
+
+def test_clean_file_strips_bom_and_reads_latin1(tmp_path):
+    src = tmp_path / "bom.csv"
+    src.write_bytes("\ufeffid,who\n1,Zoë\n".encode("utf-8"))
+    out = clean_file(_team(tmp_path), src, sample=[], chat=_echo, on_call=lambda c: None)
+    assert read_csv(out) == [{"id": "1", "who": "Zoë"}]
+    src2 = tmp_path / "latin.csv"
+    src2.write_bytes("who,note\nJos\xe9,caf\xe9\n".encode("latin-1"))
+    out2 = clean_file(_team(tmp_path), src2, sample=[], chat=_echo, on_call=lambda c: None)
+    assert read_csv(out2) == [{"who": "José", "note": "café"}]
+
+
+def test_clean_file_rejects_ragged_rows_with_a_clear_error(tmp_path):
+    import pytest
+
+    src = tmp_path / "ragged.csv"
+    src.write_text("a,b\n1,2,3\n")
+    with pytest.raises(ValueError, match="row 2.*3 cells.*2 columns"):
+        clean_file(_team(tmp_path), src, sample=[], chat=_echo, on_call=lambda c: None)

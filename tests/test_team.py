@@ -93,10 +93,14 @@ def test_duplicate_stage_names_rejected(tmp_path):
         load_team(f)
 
 
-def test_sha_changes_with_content(tmp_path):
+def test_sha_changes_with_content_and_with_prompts(tmp_path):
     a = load_team(write(tmp_path, EXAMPLE)).sha256
     b = load_team(write(tmp_path, EXAMPLE.replace("batch: 20", "batch: 10"))).sha256
     assert a != b
+    f = write(tmp_path, EXAMPLE)
+    (tmp_path / "prompts" / "clean.md").write_text("# clean, edited after the fight\n")
+    c = load_team(f).sha256
+    assert c != a, "the hash covers every prompt the team references"
 
 
 def test_bad_batch_and_string_models_name_the_stage(tmp_path):
