@@ -16,6 +16,8 @@ class ChatResult:
     completion_tokens: int
     seconds: float
     request_id: str | None
+    provider: str = ""  # from the otari-provider header: who actually served it
+    model: str = ""  # from the otari-model header
 
 
 class OtariError(RuntimeError):
@@ -100,7 +102,7 @@ class Otari:
         return r.json()["data"]
 
     def chat(self, api_key: str, alias: str, messages: list[dict], max_tokens: int, timeout: float) -> ChatResult:
-        body = {"model": alias, "messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
+        body = {"model": alias, "messages": messages, "max_tokens": max_tokens, "temperature": 0.1}
         t0 = time.perf_counter()
         r = self.http.post(
             f"{self.base_url}/api/v1/chat/completions",
@@ -122,6 +124,8 @@ class Otari:
             completion_tokens=int(usage.get("completion_tokens") or 0),
             seconds=seconds,
             request_id=r.headers.get("otari-request-id"),
+            provider=r.headers.get("otari-provider", ""),
+            model=r.headers.get("otari-model", ""),
         )
 
     def key_usage(self, api_key: str, start_iso: str) -> dict:
