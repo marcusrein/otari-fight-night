@@ -298,26 +298,30 @@ def _strip(row: dict, keys: set[str]) -> dict:
 def _merge(rows: list[dict], parsed: list[dict] | None) -> tuple[list[dict], list[bool]]:
     """Apply a model's answer to the rows it was sent. Returns the rows and an applied flag per row.
 
-    When the reply carries exactly the ids it was sent, match by id (models do reorder).
-    Otherwise, same count: match by position (small models mangle ids more often than they
-    reorder). Otherwise match by id where possible; rows with no answer stay as they were.
+    Ids win: a sent row takes the answer that carries its id. Sent rows with no id (junk) take the
+    answers with no id, in order. Only when the reply carries none of the ids it was sent, and has
+    the same count, are rows matched by position (the model mangled every id). Anything else
+    stays as it was and counts as unparsed. An answer never lands on a row it was not meant for.
     """
     if not parsed:
         return rows, [False] * len(rows)
     sent_ids = [str(r.get("id", "")).strip() for r in rows]
-    got_ids = [str(a.get("id", "")).strip() for a in parsed]
-    by_id = {gid: a for gid, a in zip(got_ids, parsed) if gid}
-    if sorted(got_ids) == sorted(sent_ids) and all(sent_ids) and len(set(sent_ids)) == len(sent_ids):
-        for row, rid in zip(rows, sent_ids):
-            _apply(row, by_id[rid])
-        return rows, [True] * len(rows)
-    if len(parsed) == len(rows):
+    by_id: dict[str, dict] = {}
+    blanks: list[dict] = []
+    for a in parsed:
+        gid = str(a.get("id", "")).strip()
+        if gid and gid in sent_ids:
+            by_id.setdefault(gid, a)
+        elif not gid:
+            blanks.append(a)
+    if not by_id and len(parsed) == len(rows) and any(sent_ids):
         for row, ans in zip(rows, parsed):
             _apply(row, ans)
         return rows, [True] * len(rows)
     applied = []
+    blank_iter = iter(blanks)
     for row, rid in zip(rows, sent_ids):
-        ans = by_id.get(rid) if rid else None
+        ans = by_id.get(rid) if rid else next(blank_iter, None)
         if ans is None:
             applied.append(False)
         else:

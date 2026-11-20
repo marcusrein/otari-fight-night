@@ -13,11 +13,11 @@ _VENDORS = {
     "groceries": ["Whole Harvest Market", "Corner Grocer", "Fresh Fields", "Daily Pantry"],
     "dining": ["Blue Fork Bistro", "Taco Lane", "Noodle House", "Sunrise Diner"],
     "transport": ["Metro Transit", "City Cab Co", "Rapid Rail", "Blue Line Scooters"],
-    "utilities": ["Northside Power", "Clearwater Utility", "Fiber Net", "Gas And Light"],
+    "utilities": ["Northside Power", "Clearwater Utility", "Fiber Net", "Metro Gas"],
     "rent": ["Maple Court Apartments", "Riverside Lofts", "Oak Street Property"],
     "entertainment": ["Starlight Cinema", "Vinyl Vault", "Game Den", "Riverside Theater"],
     "health": ["Greenleaf Pharmacy", "Summit Dental", "Wellness Clinic", "Clear Vision Optics"],
-    "office": ["Paper Trail Supply", "Desk Depot", "Print Hub", "Cable And Co"],
+    "office": ["Paper Trail Supply", "Desk Depot", "Print Hub", "Cable Depot"],
 }
 _NOTES = ["", "", "", "monthly", "reimbursable", "shared with roommate", "receipt attached", "paid by card", "auto-pay", "gift"]
 _AMOUNT_RANGE = {"rent": (900, 2400), "utilities": (30, 260), "groceries": (8, 190), "dining": (6, 120), "transport": (2, 80), "entertainment": (5, 150), "health": (10, 400), "office": (3, 220)}

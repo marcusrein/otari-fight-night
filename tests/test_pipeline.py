@@ -93,20 +93,20 @@ def test_map_prompt_gets_sample_and_rows_have_no_private_keys(tmp_path):
     assert seen["keys"] == set(ROWS[0])
 
 
-def test_map_drop_on_real_row_is_refused_and_position_match_beats_rid(tmp_path):
+def test_map_drop_on_real_row_is_refused_and_mangled_id_row_is_left_alone(tmp_path):
     team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
 
     def answer(model, rows):
         out = [dict(r) for r in rows]
         out[0]["drop"] = True
-        out[1]["id"] = "GARBLED"  # model mangled the id but count matches, so position wins
-        out[1]["vendor"] = "ByPosition"
+        out[1]["id"] = "GARBLED"  # the other nine ids are intact, so this answer lands nowhere
+        out[1]["vendor"] = "Lost"
         return json.dumps(out)
 
     out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
     assert len(out) == 10, "a real row with a unique id is never deleted on a model's say-so"
     assert stats[0].refused_drops == 1
-    assert out[1]["id"] == "T0002" and out[1]["vendor"] == "ByPosition"
+    assert out[1]["id"] == "T0002" and out[1]["vendor"] == "V" and stats[0].unparsed == 1
     assert all("drop" not in r for r in out)
 
 
@@ -372,3 +372,40 @@ def test_user_message_asks_for_string_values(tmp_path):
 
     run_team(team, [dict(r) for r in ROWS], SAMPLE, chat, lambda c: None)
     assert "every value as a string" in seen["user"]
+
+
+def test_same_count_but_substituted_row_never_contaminates_neighbors(tmp_path):
+    """A model drops one real row and emits a junk row in its place: same count, so position
+    matching would smear the junk onto a real id. Ids that overlap must win."""
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+
+    def answer(model, rows):
+        out = [{**r, "vendor": "Fixed"} for r in rows]
+        out[3] = {"id": "", "date": "", "vendor": "TOTAL", "amount": "999", "category": "", "note": ""}
+        return json.dumps(out[::-1])  # reordered too
+
+    out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, FakeChat(answer), lambda c: None)
+    assert [r["id"] for r in out] == [r["id"] for r in ROWS]
+    assert out[3]["vendor"] == "V" and all(r["vendor"] == "Fixed" for i, r in enumerate(out) if i != 3)
+    assert stats[0].unparsed == 1
+    assert not any(r["vendor"] == "TOTAL" for r in out)
+
+
+def test_junk_rows_match_junk_rows_in_order(tmp_path):
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+    rows = [dict(ROWS[0]), {"id": "", "date": "", "vendor": "TOTAL", "amount": "1", "category": "", "note": ""}, dict(ROWS[1]), {"id": "", "date": "x", "vendor": "x", "amount": "x", "category": "x", "note": "x"}]
+
+    def answer(model, rows):
+        out = []
+        for r in rows:
+            r = dict(r)
+            if r["id"] == "":
+                r["drop"] = True
+            else:
+                r["vendor"] = "Fixed"
+            out.append(r)
+        return json.dumps(out)
+
+    out, stats = run_team(team, rows, SAMPLE, FakeChat(answer), lambda c: None)
+    assert [r["id"] for r in out] == ["T0001", "T0002"] and all(r["vendor"] == "Fixed" for r in out)
+    assert stats[0].unparsed == 0
