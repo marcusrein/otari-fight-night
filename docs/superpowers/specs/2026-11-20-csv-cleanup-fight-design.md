@@ -71,13 +71,17 @@ Junk rows have no id.
 
 ### Grading
 
-`fightnight/grade.py` compares a cleaned CSV to golden by id. Per golden id: exactly one
-row expected. Score = correct cells / total golden cells, with a kept-duplicate row
-counting as a full row of wrong cells and a dropped id counting as a full row of wrong
-cells. Junk rows that survive count as a full row wrong. Normalization before compare:
-strip, dates parsed to ISO, amounts to 2 decimals, category case-insensitive. One number
-in [0, 1], reported as a percentage, plus counts of dup-kept, dropped, junk-kept, and
-per-column accuracy so entrants see where a team fails.
+`fightnight/grade.py` compares a cleaned CSV to golden by id. The headline is **net repair**:
+problems = every cell of the first messy copy of each id that differs from golden, plus one per
+extra duplicate copy, plus one per junk row; fixed = problems that came back exactly right (a
+removed extra copy or junk row counts as fixed); broken = clean cells now wrong, plus five per
+real row dropped; net repair = (fixed - broken) / problems as a percentage. Doing nothing scores
+0, wrecking clean data goes negative. Comparison is exact: cleaning means producing the clean
+form. The card also shows cells-exactly-right for reference, per-column repair rates for both
+teams, and counts of duplicates kept, rows dropped and junk kept.
+
+(Revised after review on 2026-11-20: the original lenient cell-accuracy metric gave an untouched
+medium file about 72%, so the fight measured dedupe and little else.)
 
 ### Team file
 
@@ -123,8 +127,8 @@ Stage types:
   be marked `"drop": true` (duplicates, junk).
 - `route`: splits rows by the value of a column into named downstream stages; rows the
   map misses go to `"*"`. Downstream stages run on their slice and the slices merge back.
-- `vote`: N models answer for one column, majority wins, ties keep the first model's
-  answer.
+- `vote`: N models each see the same original rows and answer for one column; majority
+  wins, ties go to the first voter that answered, an unreadable reply abstains.
 - `verify`: one model sees each batch and the golden sample (20 clean rows shipped as
   `sample.csv`), returns corrected rows; `retry` reruns rows it flags.
 
@@ -144,8 +148,8 @@ recorded; the card reports the share of row-processing requests served by `ollam
 
 ### Fight
 
-`make fight`: generate messy.csv for the configured seed and preset (default medium,
-seed random unless `SEED=`), run `teams/stock.yml` with the stock key, run `team.yml`
+`make fight`: generate messy.csv for the configured seed and preset (default medium, 50 rows
+since 3B models produce about one row per second per team, seed random unless `SEED=`), run `teams/stock.yml` with the stock key, run `team.yml`
 with the team key, grade both, write `fight-card.md`, `fight-card.json`, `fight-log.jsonl`
 (every request: stage, model, provider, rows in, rows out, seconds, tokens). Sequential,
 never parallel. `make clean FILE=x.csv` runs `team.yml` on that file and writes
@@ -163,8 +167,8 @@ file sha256.
 ### Stock team
 
 Two stages: `map` with `qwen2.5:3b`, batch 10, one generic clean prompt, then `verify`
-with `llama3.2:3b`. Deliberately simple so it is beatable, but it must score above 50% on
-medium or the baseline is noise.
+with `qwen2.5:3b` (llama3.2:3b answered in prose and tripled the time). Deliberately simple
+so it is beatable.
 
 ### Judging (README, not code)
 
