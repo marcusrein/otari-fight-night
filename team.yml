@@ -16,36 +16,13 @@
 # Prompts are markdown files; {sample} inside one is replaced by 20 clean reference rows.
 # The referee reads the last JSON array in each reply. Ids are never the model's to change.
 
-name: triage-and-route
+name: small-batches
+# The stock team with one change: batches of 5 instead of 10. On the reference machine that
+# alone took the cleaner from 21 lost rows to 0. Start here, then try a second model, a route,
+# a vote on the category column, or your own prompts. See teams/triage-and-route.yml for an
+# architecture that lost, and why.
 stages:
-  - name: triage
-    type: map
-    model: qwen2.5:3b
-    batch: 15
-    prompt: prompts/triage.md
-
-  - name: route
-    type: route
-    by: tag
-    to:
-      junk: junk
-      date: dates
-      dirty: cleaner
-      # rows tagged ok pass through untouched
-
-  - name: junk
-    type: map
-    model: qwen2.5:3b
-    batch: 20
-    prompt: prompts/clean.md
-
-  - name: dates
-    type: map
-    model: llama3.2:3b
-    batch: 10
-    prompt: prompts/dates.md
-
-  - name: cleaner
+  - name: clean
     type: map
     model: qwen2.5:3b
     batch: 5
@@ -54,6 +31,5 @@ stages:
   - name: check
     type: verify
     model: qwen2.5:3b
-    batch: 10
+    batch: 5
     prompt: prompts/check.md
-    retry: 0

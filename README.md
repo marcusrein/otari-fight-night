@@ -64,7 +64,10 @@ uv run fight.py
 
 ## The one lever: `team.yml`
 
-Rows flow through stages in order. Four stage types, no code:
+Rows flow through stages in order. Four stage types, no code. The shipped `team.yml` is the
+stock team with batches of 5 instead of 10, which on the reference machine was enough to win.
+A bigger example, `teams/triage-and-route.yml`, sorts rows by what is wrong with them and sends
+each kind to a specialist:
 
 ```yaml
 name: triage-and-route
@@ -73,32 +76,36 @@ stages:
     type: map
     model: qwen2.5:3b
     batch: 15
-    prompt: prompts/triage.md
-  - name: route           # send each tag to a specialist
+    prompt: ../prompts/triage.md
+  - name: route           # send each tag to a specialist; rows tagged ok pass through
     type: route
     by: tag
-    to: {junk: junk, date: dates, dirty: cleaner}   # rows tagged ok pass through
+    to: {junk: junk, date: dates, dirty: cleaner}
   - name: junk
     type: map
     model: qwen2.5:3b
     batch: 20
-    prompt: prompts/clean.md
+    prompt: ../prompts/clean.md
   - name: dates
     type: map
     model: llama3.2:3b
     batch: 10
-    prompt: prompts/dates.md
+    prompt: ../prompts/dates.md
   - name: cleaner
     type: map
     model: qwen2.5:3b
     batch: 5
-    prompt: prompts/clean.md
+    prompt: ../prompts/clean.md
   - name: check           # re-read everything against the clean sample
     type: verify
     model: qwen2.5:3b
     batch: 10
-    prompt: prompts/check.md
+    prompt: ../prompts/check.md
 ```
+
+It lost to the stock team on the reference machine, and the card's stage table shows exactly
+why: a 3B triage model tags dirty rows `ok`, and they skip every model. That is the hackathon in
+one card. Run it with `TEAM=teams/triage-and-route.yml make fight` and make it win.
 
 | Type | What it does | Knobs |
 |---|---|---|
