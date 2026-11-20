@@ -11,13 +11,20 @@ from the header Otari stamps on each response.
 ```
 Otari Fight Night: CSV cleanup
   stock: teams/stock.yml (qwen2.5:3b)
-  yours: team.yml (qwen2.5:3b, llama3.2:3b)
-  dataset: 100 clean rows -> 114 messy rows, preset medium, seed 48121
-  stock (stock): 71.4% in 142s, 20 requests, 1.93 GB of models, dup kept 1, dropped 0, junk kept 2
-  team (triage-and-route): 78.9% in 201s, 31 requests, 3.95 GB of models, dup kept 0, dropped 0, junk kept 1
+  yours: team.yml (qwen2.5:3b)
+  Ollama 0.40.2, models present
+  Otari 0.54.0 at http://localhost:8000, roster ready
+  preflight qwen2.5:3b: served by ollama in 0.3s
+  dataset: 50 clean rows -> 63 messy rows, preset medium, seed 20261120
+  stock (stock): net repair 40.9% (54/88 fixed, 18 broken) in 130s, 14 requests, 1.93 GB of models, dup kept 0, dropped 0, junk kept 3
+  team (small-batches): net repair 47.7% (57/88 fixed, 15 broken) in 124s, 26 requests, 1.93 GB of models, dup kept 0, dropped 0, junk kept 2
 
-triage-and-route 78.9% vs stock 71.4%: +7.5 points.
+small-batches net repair 47.7% vs stock 40.9%: +6.8 points.
+wrote fight-card.md, fight-card.json, fight-log.jsonl and data/{stock,team}.clean.csv
 ```
+
+That is a real run on an M2 Pro with 16 GB, about four minutes end to end. The full card is in
+[examples/fight-card-m2pro-16gb.md](examples/fight-card-m2pro-16gb.md).
 
 ## You need
 
@@ -198,7 +205,8 @@ Scores are self-reported and the machines differ, so trust comes from process, n
 - **Announce the scoring seed when submissions close**, then rerun every contender for the
   "beat the stock team" points yourself. Cards are markdown and can be edited by hand; the rerun is the check.
 - **Measure the noise first.** Run `TEAM=teams/stock.yml make fight` a few times and publish the
-  stock-vs-stock spread. Only deltas outside that band mean anything.
+  stock-vs-stock spread. Only deltas outside that band mean anything. On the reference machine
+  the stock team scored 42.0 and 40.9 on the same seed in two runs, so expect a point or two.
 - **Models must be plain public Ollama tags.** No `-cloud` tags (they leave the machine through
   Ollama and still show as local), no custom Modelfiles (not reproducible). A bracket team has
   to fit in 16 GB.
