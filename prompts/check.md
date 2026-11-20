@@ -6,4 +6,4 @@ Check each row against the reference sample and fix what is still wrong:
 - category must be one of groceries, dining, transport, utilities, rent, entertainment, health, office
 - vendor must be Title Case with single spaces
 
-Rows with an empty id are junk: "drop": true. Never change an id. Return every row, in order, as a JSON array only.
+Only a row with an empty id is junk: "drop": true. Every row with an id is real and must be returned. Never change an id. Return every row, in order, as a JSON array only, no commentary.

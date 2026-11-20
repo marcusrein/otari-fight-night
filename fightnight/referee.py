@@ -118,6 +118,7 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
     with log_path.open("w") as f:
         def log(row: dict) -> None:
             f.write(json.dumps(row) + "\n")
+            f.flush()  # the log is the forensic record; it must survive a crash or a Ctrl-C
 
         results = {}
         for label, t, key in (("stock", stock, settings.key_stock), ("team", team, settings.key_team)):

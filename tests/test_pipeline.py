@@ -324,3 +324,23 @@ stages:
   - {name: r2, type: route, by: tag, to: {"*": m}}
   - {name: m, type: map, model: a, batch: 5, prompt: prompts/p.md}
 """)
+
+
+def test_route_without_catch_all_passes_unmatched_rows_through(tmp_path):
+    team = team_from(tmp_path, """
+stages:
+  - {name: triage, type: map, model: t, batch: 10, prompt: prompts/p.md}
+  - {name: route, type: route, by: tag, to: {bad: fix}}
+  - {name: fix, type: map, model: f, batch: 10, prompt: prompts/p.md}
+""")
+
+    def answer(model, rows):
+        if model.endswith(":t"):
+            return json.dumps([{**r, "tag": "bad" if i % 2 else "ok"} for i, r in enumerate(rows)])
+        return json.dumps([{**r, "vendor": "fixed"} for r in rows])
+
+    chat = FakeChat(answer)
+    out, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, chat, lambda c: None)
+    assert [r["vendor"] for r in out] == ["V", "fixed"] * 5
+    assert [m for m, _ in chat.calls] == ["ollama:t", "ollama:f"]
+    assert stats[1].rows == 5

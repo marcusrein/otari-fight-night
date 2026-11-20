@@ -76,7 +76,7 @@ stages:
   - name: route           # send each tag to a specialist
     type: route
     by: tag
-    to: {junk: junk, date: dates, "*": cleaner}
+    to: {junk: junk, date: dates, dirty: cleaner}   # rows tagged ok pass through
   - name: junk
     type: map
     model: qwen2.5:3b
@@ -92,18 +92,17 @@ stages:
     model: qwen2.5:3b
     batch: 5
     prompt: prompts/clean.md
-  - name: check           # a second model re-reads everything against the clean sample
+  - name: check           # re-read everything against the clean sample
     type: verify
-    model: llama3.2:3b
+    model: qwen2.5:3b
     batch: 10
     prompt: prompts/check.md
-    retry: 1
 ```
 
 | Type | What it does | Knobs |
 |---|---|---|
 | `map` | One model gets rows in batches and returns them corrected. It may add keys (like `tag`) or mark junk and duplicates `"drop": true`. | `model`, `batch`, `prompt` |
-| `route` | Splits rows by a column's value and sends each group to a named stage. Those stages run only on their group. `"*"` catches the rest. | `by`, `to` |
+| `route` | Splits rows by a column's value and sends each group to a named stage. Those stages run only on their group. `"*"` catches the rest; without it, unmatched rows pass through untouched, which is how rows tagged `ok` skip every model. | `by`, `to` |
 | `vote` | Several models answer for one column. Majority wins, ties go to the first model. | `models`, `column`, `prompt`, `batch` |
 | `verify` | One model re-checks rows with the clean sample in view. Rows it marks `"flag": true` are re-sent `retry` times. | `model`, `prompt`, `batch`, `retry` |
 

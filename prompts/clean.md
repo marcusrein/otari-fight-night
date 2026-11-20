@@ -10,8 +10,7 @@ Rules:
 - category: exactly one of groceries, dining, transport, utilities, rent, entertainment, health, office. Map synonyms (Food & Dining -> dining, bills -> utilities, housing -> rent, medical -> health). Infer a blank category from the vendor.
 - note: trim spaces, remove curly quotes. Keep an empty note empty.
 - If amount and category are swapped in a row, swap them back.
-- A row with an empty id, a repeated header, a TOTAL row, or dashes is junk: return it with "drop": true.
-- If two rows have the same id, keep one and return the other with "drop": true.
+- Use "drop": true ONLY for a row whose id is empty (a repeated header, a TOTAL row, dashes, a blank row), or for the second of two rows in this batch that share the same id. Every other row is real: fix it, never drop it.
 - Never change an id. Never invent rows. Return every row you were given, in order.
 
 Reply with only the JSON array.
