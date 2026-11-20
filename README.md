@@ -28,10 +28,19 @@ That is a real run on an M2 Pro with 16 GB, about four minutes end to end. The f
 
 ## You need
 
-- [Ollama](https://ollama.com) running on the host (`ollama serve`, or the app)
-- Docker (Desktop or Engine with compose)
-- [uv](https://docs.astral.sh/uv/)
+- [Otari](https://github.com/mozilla-ai/otari), the gateway every model call goes through. You do
+  not install it: `make fight` pulls the `mzdotai/otari:0.54.0` image and runs it with Docker
+  compose, configured by `otari.yml`. It is the point of the exercise, so it is worth a look at
+  `docker compose logs otari` and the dashboard at http://localhost:8000 once it is up.
+- [Ollama](https://ollama.com) running on the host (`ollama serve`, or the app). This serves the
+  models; Otari sits in front of it.
+- Docker (Desktop or Engine with compose), to run Otari.
+- [uv](https://docs.astral.sh/uv/), to run the referee.
 - `make` (macOS and Linux have it; Windows see below)
+
+Nothing in this kit talks to a model except through Otari. The referee holds one scoped Otari
+key per team, the dashboard shows every request, and the fight card is built from Otari's usage
+API and response headers.
 
 ## Run it
 
