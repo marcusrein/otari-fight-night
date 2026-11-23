@@ -54,6 +54,38 @@ def test_render_marks_stock_win():
 
 def test_render_shows_small_hosted_costs():
     from fightnight.card import _usd
-    assert _usd(0) == "$0.00" and _usd(None) == "$0.00"
+    assert _usd(0) == "$0.00" and _usd(None) == "n/a"
     assert _usd(0.000773) == "$0.0008"
     assert _usd(1.5) == "$1.50"
+
+
+def test_stage_usage_shares_and_mixed_providers():
+    fight = _fight()
+    clean = fight.team.stages[0]
+    clean.provider_requests = {"ollama": 29, "unknown": 1}
+    fight.team.stages.append(StageStats("check", "hosted", requests=2, seconds=10,
+                                      prompt_tokens=500, completion_tokens=1000,
+                                      provider_requests={"otari-ai": 2}))
+    fight.team.seconds = 50
+    card = build(fight, {}, {})
+    stage = card["team"]["stages"][0]
+    assert stage["prompt_tokens"] == 1000
+    assert stage["completion_tokens"] == 500
+    assert stage["token_share_pct"] == 50
+    assert stage["time_share_pct"] == 80
+    assert stage["provider_requests"] == {"ollama": 29, "unknown": 1}
+    md = render_md(card)
+    assert "ollama: 29, unknown: 1" in md and "otari-ai: 2" in md
+    assert "Most request time: **clean**" in md
+    assert "not quality" in md
+
+
+def test_no_requests_has_no_expensive_stage_or_division_by_zero():
+    fight = _fight()
+    for side in (fight.team, fight.stock):
+        side.seconds = side.requests = 0
+        side.stages = [StageStats("clean", "a")]
+    card = build(fight, {}, {})
+    assert card["team"]["stages"][0]["token_share_pct"] == 0
+    assert card["team"]["stages"][0]["time_share_pct"] == 0
+    assert "Most request time" not in render_md(card)

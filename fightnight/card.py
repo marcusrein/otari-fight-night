@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from .referee import FightResult, TeamResult
 def _side(r: TeamResult) -> dict:
     totals = r.usage.get("totals", {}) if r.usage else {}
     score = r.grade.repair_pct
+    tokens = sum(s.prompt_tokens + s.completion_tokens for s in r.stages)
     return {
         "name": r.team.name,
         "file": str(r.team.path),
@@ -43,7 +45,15 @@ def _side(r: TeamResult) -> dict:
             "avg_gateway_latency_ms": round(totals["avg_latency_ms"]) if totals.get("avg_latency_ms") is not None else None,
             "cost_usd": totals.get("cost"),
         },
-        "stages": [{"name": s.name, "model": s.model, "requests": s.requests, "rows": s.rows, "seconds": round(s.seconds, 1), "unparsed": s.unparsed, "failed_requests": s.failed_requests, "local_requests": s.local_requests} for s in r.stages],
+        "stages": [{
+            "name": s.name, "model": s.model, "requests": s.requests, "rows": s.rows,
+            "seconds": round(s.seconds, 1), "unparsed": s.unparsed,
+            "failed_requests": s.failed_requests, "local_requests": s.local_requests,
+            "prompt_tokens": s.prompt_tokens, "completion_tokens": s.completion_tokens,
+            "token_share_pct": round((s.prompt_tokens + s.completion_tokens) / tokens * 100, 1) if tokens else 0,
+            "time_share_pct": round(s.seconds / r.seconds * 100, 1) if r.seconds else 0,
+            "provider_requests": dict(s.provider_requests),
+        } for s in r.stages],
     }
 
 
@@ -51,6 +61,8 @@ def build(result: FightResult, specs: dict, gateway: dict) -> dict:
     team, stock = _side(result.team), _side(result.stock)
     delta = round(team["repair_pct"] - stock["repair_pct"], 1)
     return {
+        "schema_version": 2,
+        "request_timing": "includes_failed_requests",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "dataset": {"seed": result.seed, "preset": result.preset, "rows": result.rows, "messy_rows": result.messy_rows, "sha256": result.dataset_sha},
         "machine": specs,
@@ -70,7 +82,8 @@ def _pct(v):
 
 
 def _usd(v) -> str:
-    v = v or 0
+    if v is None:
+        return "n/a"
     return f"${v:.2f}" if v == 0 or v >= 0.01 else f"${v:.4f}"
 
 
@@ -111,7 +124,7 @@ def render_md(card: dict) -> str:
         f"| Rows a model lost or garbled (kept as-is) | {s['unparsed_rows']} | {t['unparsed_rows']} |",
         f"| Failed requests (timeouts, gateway errors) | {s['failed_requests']} | {t['failed_requests']} |",
         f"| Real rows a model tried to delete (refused) | {s['refused_drops']} | {t['refused_drops']} |",
-        f"| Seconds | {s['seconds']} | {t['seconds']} |",
+        f"| Request seconds (including failures) | {s['seconds']} | {t['seconds']} |",
         f"| Requests | {s['requests']} | {t['requests']} |",
         f"| Model weights loaded | {s['weights_gb']} GB | {t['weights_gb']} GB |",
         f"| Net repair per GB | {_na(s['repair_per_gb'])} | {_na(t['repair_per_gb'])} |",
@@ -140,9 +153,29 @@ def render_md(card: dict) -> str:
         lines.append(f"| {st['name']} | {st['model']} | {st['requests']} | {st['rows']} | {st['seconds']} | {st['unparsed']} | {st['failed_requests']} |")
     lines += [
         "",
+        "### Where the work went",
+        "",
+        "| Stage | Prompt tokens | Completion tokens | Token share | Request time share | Providers (requests) |",
+        "|---|---|---|---|---|---|",
+    ]
+    for st in t["stages"]:
+        providers = ", ".join(f"{p}: {n}" for p, n in sorted(st["provider_requests"].items())) or "n/a"
+        lines.append(f"| {st['name']} | {st['prompt_tokens']} | {st['completion_tokens']} | {st['token_share_pct']}% | {st['time_share_pct']}% | {providers} |")
+    active = [st for st in t["stages"] if st["requests"]]
+    if active:
+        slowest = max(active, key=lambda st: st["seconds"])
+        most_tokens = max(active, key=lambda st: st["prompt_tokens"] + st["completion_tokens"])
+        lines += ["", f"Most request time: **{slowest['name']}** ({slowest['time_share_pct']}%). Most tokens: **{most_tokens['name']}** ({most_tokens['token_share_pct']}%)."]
+    lines += [
+        "",
+        "These shares measure cost, not quality: to see whether a stage earns its place, remove or swap it and rerun on the same seed. "
+        "Request time sums model calls, failed ones included; it is not wall-clock time. Providers come from Otari's response headers; a failed request has none and shows as unknown.",
+    ]
+    lines += [
+        "",
         "## Reproduce",
         "",
-        f"`SEED={d['seed']} PRESET={d['preset']} ROWS={d['rows']} make fight`. Messy file sha256 `{d['sha256']}`. Team file sha256 `{t['sha256']}`, stock `{s['sha256']}`.",
+        f"`TEAM={shlex.quote(t['file'])} SEED={d['seed']} PRESET={d['preset']} ROWS={d['rows']} make fight`. Messy file sha256 `{d['sha256']}`. Team file sha256 `{t['sha256']}`, stock `{s['sha256']}`.",
         "",
     ]
     return "\n".join(lines)
