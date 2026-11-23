@@ -88,6 +88,12 @@ uv run fight.py
 - `fight-log.jsonl`: every request (stage, model, provider, rows in and out, seconds, tokens).
 - `data/team.clean.csv` and `data/stock.clean.csv` next to `data/messy.csv` and `data/golden.csv`,
   so you can diff what each team got wrong.
+- `runs/<timestamp>/`: every fight saved whole (card, log, data, and a copy of both teams' YAML
+  and prompts), so editing `team.yml` never loses a result. Compare two on the same seed with
+  `uv run fight.py compare runs/<before> runs/<after>`: change in net repair, broken cells, time,
+  requests and tokens. Try `TEAM=teams/no-verifier.yml` against the starter to see whether the
+  check stage earns its time ([one measured pair](examples/verifier-comparison.md)). Runs stay
+  until you delete them; `make reset` keeps them.
 - The Otari dashboard at http://localhost:8000 with one API key per team. Sign in with the admin
   key from `make keys`.
 

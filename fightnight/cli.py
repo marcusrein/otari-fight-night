@@ -16,6 +16,7 @@ from .pipeline import qualify_model
 from .corrupt import read_csv
 from .referee import DATA_DIR, chat_via, clean_file, load_sample, make_dataset, run_fight
 from .team import Team, TeamError, load_team
+from .runs import compare, finish_run, read_card, start_run
 
 
 def die(msg: str) -> None:
@@ -117,17 +118,19 @@ def cmd_fight() -> None:
     print(f"  stock: {s.stock_path} ({', '.join(stock.models())})")
     print(f"  yours: {s.team_path} ({', '.join(team.models())})")
     otari, sizes, ollama_version = _prepare(s, stock.models() + team.models())
+    run_dir = start_run(team, stock)
+    print(f"  saving this fight in {run_dir}")
     try:
-        result = run_fight(s, otari, team, stock, sizes)
+        result = run_fight(s, otari, team, stock, sizes, log_path=run_dir / "fight-log.jsonl", out_dir=run_dir / "data")
     except OtariError as e:
-        die(str(e))
+        die(f"{e}\n  partial log and team sources kept in {run_dir}")
     except KeyboardInterrupt:
-        die("stopped. No fight card written.")
+        die(f"stopped. No fight card written; partial log and team sources kept in {run_dir}.")
     try:
         digests = ollama.digests(s.ollama_url)
     except Exception:
         digests = {}
-    golden = read_csv(DATA_DIR / "golden.csv")
+    golden = read_csv(run_dir / "data" / "golden.csv")
     leaks = {"team": prompt_leaks(team, golden), "stock": prompt_leaks(stock, golden)}
     gateway = {
         "otari_url": s.otari_url,
@@ -142,7 +145,7 @@ def cmd_fight() -> None:
         },
     }
     card = cardmod.build(result, specs.collect(), gateway)
-    cardmod.write(card)
+    finish_run(run_dir, card)
     d = card["result"]["delta_points"]
     print()
     print(f"{card['team']['name']} net repair {card['team']['repair_pct']}% vs stock {card['stock']['repair_pct']}%: {'+' if d >= 0 else ''}{d} points.")
@@ -150,7 +153,17 @@ def cmd_fight() -> None:
     for who, notes in leaks.items():
         for n in notes:
             print(f"  warning: {who} prompt looks like it carries the answer key: {n}")
+    print(f"saved run: {run_dir}  (compare two: uv run fight.py compare BEFORE AFTER)")
     print(f"dashboard: {s.otari_url}  (admin key: make keys)")
+
+
+def cmd_compare(args: list[str]) -> None:
+    if len(args) != 2:
+        die("usage: uv run fight.py compare BEFORE AFTER (run directories or fight-card.json files)")
+    try:
+        print(compare(read_card(Path(args[0])), read_card(Path(args[1]))))
+    except ValueError as e:
+        die(str(e))
 
 
 def cmd_clean(path_arg: str | None) -> None:
@@ -196,6 +209,8 @@ def main(argv: list[str] | None = None) -> None:
     try:
         if cmd == "clean":
             return cmd_clean(args[1] if len(args) > 1 else None)
+        if cmd == "compare":
+            return cmd_compare(args[1:])
         if cmd == "check-card":
             return cmd_check_card(args[1] if len(args) > 1 else None)
         {
@@ -204,6 +219,6 @@ def main(argv: list[str] | None = None) -> None:
             "init-env": cmd_init_env,
             "wait-otari": cmd_wait_otari,
             "keys": cmd_keys,
-        }.get(cmd, lambda: die(f"unknown command {cmd!r}. Commands: fight, clean FILE, check-card CARD.json, gen, init-env, wait-otari, keys"))()
+        }.get(cmd, lambda: die(f"unknown command {cmd!r}. Commands: fight, compare BEFORE AFTER, clean FILE, check-card CARD.json, gen, init-env, wait-otari, keys"))()
     except ConfigError as e:
         die(str(e))

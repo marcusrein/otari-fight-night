@@ -10,3 +10,4 @@ fight-log.jsonl
 data/golden.csv
 data/messy.csv
 *.clean.csv
+runs/
