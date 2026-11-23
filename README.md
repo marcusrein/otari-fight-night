@@ -13,7 +13,7 @@ prompts. The referee (a Python script in this repo) generates a deliberately ter
 *stock team* (`teams/stock.yml`, the fixed pipeline everyone is measured against) and then yours on
 the same file and the same hardware, and grades both. Edit `team.yml` and its prompts until yours
 beats the stock team by as much as you can, then submit the fight card that shows it.
-Submissions are open from November 25 to December 2, 2026 ([details below](#submit)).
+The jam runs online from November 25 to December 2, 2026, for one $100 prize ([details below](#submit)).
 
 Nothing leaves your machine unless you decide it should, and the card shows which provider served
 every request, taken from the header Otari stamps on each response.
@@ -197,18 +197,24 @@ Out of 100, scored from the card, the team file, the log and your write-up:
 | Beat the stock team | 30 | The net-repair delta on your machine, and whether it holds on a second seed |
 | Architecture story | 25 | Why this split. The log should show the stages mattered |
 | Pound for pound | 20 | Net repair per GB of local model weights, and seconds |
-| Show and tell | 15 | A write-up, post or 60-second video worth sharing |
-| Friction log | 10 | Three specific things that slowed you down |
+| Show and tell | 15 | A screen recording of up to 3 minutes, with your voice: the fight, the card, and what you changed and why |
+| Friction log | 10 | Specific, honest answers to the three feedback questions in SUBMISSION.md |
 
-The scoring seed is announced when submissions close. The top five team files are rerun live on
-the host machine for the bracket, so a bracket team has to fit in 16 GB.
+To be eligible: every request served locally (the card must show 100%), plain public Ollama tags,
+a team that fits in 16 GB, `PRESET=medium` and `ROWS=50`, and the official stock sha256
+`13571dac3037` on your card. The scoring seed is announced when submissions close; top entries are
+rerun on it on a 16 GB machine, and the rerun is what counts. The winner is announced on the
+Mozilla OSAI livestream on December 8, where the winning team runs live.
 
 ## Stretch goals
+
+Neither of these is eligible for the Jam Sesh #1 prize, which is local models only. Jam Sesh #2
+opens things up to remote models.
 
 - **Frontier through the same gateway.** With an [otari.ai](https://otari.ai) key in `.env` as
   `OTARI_AI_KEY`, any stage can use `model: otari-ai:openai/gpt-oss-120b`. Same team file, same
   referee, same dashboard. Those requests cost money, and the card's "requests served locally"
-  drops below 100%, which judges will notice. Hosted reasoning models spend the per-request token
+  drops below 100%. Hosted reasoning models spend the per-request token
   budget thinking, so check the "broken rows" column before you trust a hosted stage. The interesting version is a stage that touches
   no rows at all: a coach that reads the scores and rewrites a prompt. Not built yet; that is
   round two.
@@ -227,18 +233,21 @@ Scores are self-reported and the machines differ, so trust comes from process, n
   stock-vs-stock spread. Only deltas outside that band mean anything. On the reference machine
   the stock team scored 42.0 and 40.9 on the same seed in two runs, so expect a point or two.
 - **Models must be plain public Ollama tags.** No `-cloud` tags (they leave the machine through
-  Ollama and still show as local), no custom Modelfiles (not reproducible). A bracket team has
-  to fit in 16 GB.
-- **A hosted stage is allowed, visible, and separate.** The card's "requests served locally"
-  drops below 100%; judge those entries against each other.
+  Ollama and still show as local), no custom Modelfiles (not reproducible). A team has to fit
+  in 16 GB.
+- **Local only for Jam Sesh #1.** A card with "requests served locally" below 100% is not
+  eligible.
 
 ## Submit
 
-Fill in [SUBMISSION.md](SUBMISSION.md): fight card, team file and prompts, three friction bullets,
-and a link to your write-up or video.
+The deadline is December 2, 2026. Submit on
+[DoraHacks](https://dorahacks.io/hackathon/2498/detail):
 
-Submissions open 2026-11-25 12:00 and close 2026-12-02 12:00, on
-[DoraHacks](https://dorahacks.io/hackathon/2498/detail).
+1. A link to your public GitHub repo, made from this template, with your `team.yml`, every prompt
+   it uses, and [SUBMISSION.md](SUBMISSION.md) filled in.
+2. A link to your video (up to 3 minutes, a screen recording with your voice, no AI-generated
+   video).
+3. An email address to reach you if you win. Put it in the DoraHacks form, not in your repo.
 
 ## How it is wired
 
