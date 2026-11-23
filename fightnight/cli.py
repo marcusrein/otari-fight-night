@@ -11,7 +11,7 @@ from . import card as cardmod
 from . import ollama, specs
 from .config import ENV_PATH, ConfigError, Settings, init_env, read_env_file
 from .otari import Otari, OtariError
-from .integrity import prompt_bytes, prompt_leaks, referee_fingerprint
+from .integrity import prompt_bytes, prompt_leaks, referee_fingerprint, verify_card
 from .pipeline import qualify_model
 from .corrupt import read_csv
 from .referee import DATA_DIR, chat_via, clean_file, load_sample, make_dataset, run_fight
@@ -175,18 +175,35 @@ def cmd_clean(path_arg: str | None) -> None:
     print(f"wrote {out}")
 
 
+def cmd_check_card(path_arg: str | None) -> None:
+    """Organizers: verify a submitted fight-card.json against this repo's main before a rerun."""
+    path = Path(path_arg or "fight-card.json").expanduser()
+    if not path.exists():
+        die(f"{path} not found (pass the entrant's fight-card.json)")
+    ok, findings = verify_card(path)
+    if ok:
+        print(f"{path.name}: PASS. Referee commit is on main, hashes match, local, scored config, no answer-key flags. Now rerun it.")
+        return
+    print(f"{path.name}: FAIL")
+    for f in findings:
+        print(f"  - {f}")
+    sys.exit(2)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     cmd = args[0] if args else "fight"
     try:
         if cmd == "clean":
             return cmd_clean(args[1] if len(args) > 1 else None)
+        if cmd == "check-card":
+            return cmd_check_card(args[1] if len(args) > 1 else None)
         {
             "fight": cmd_fight,
             "gen": cmd_gen,
             "init-env": cmd_init_env,
             "wait-otari": cmd_wait_otari,
             "keys": cmd_keys,
-        }.get(cmd, lambda: die(f"unknown command {cmd!r}. Commands: fight, clean FILE, gen, init-env, wait-otari, keys"))()
+        }.get(cmd, lambda: die(f"unknown command {cmd!r}. Commands: fight, clean FILE, check-card CARD.json, gen, init-env, wait-otari, keys"))()
     except ConfigError as e:
         die(str(e))

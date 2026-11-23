@@ -1,7 +1,7 @@
 # One command: make fight
 # Windows without make: run the three commands under `fight` by hand.
 
-.PHONY: fight clean gen up down keys dashboard test reset
+.PHONY: fight clean gen check-card up down keys dashboard test reset
 
 fight: .env up
 	uv run fight.py
@@ -14,6 +14,11 @@ clean: .env
 
 gen: .env
 	uv run fight.py gen
+
+# Organizers: verify a submitted card against this repo's main before rerunning it.
+check-card:
+	@test -n "$(CARD)" || (echo "usage: make check-card CARD=path/to/fight-card.json" && exit 1)
+	uv run fight.py check-card "$(CARD)"
 
 .env:
 	uv run fight.py init-env

@@ -216,8 +216,9 @@ What you may not do is hand the model the answers:
 - **No retagged models.** `ollama cp` can put any weights under any name. The card records the
   digest Ollama reports for each model; the official digest for `qwen2.5:3b` is `357c53fb659c`.
   A stock team running on different weights is a different stock team.
-- **No edited referee.** The card prints a sha256 of the referee's own source and the git commit
-  it ran from, with `(modified)` if the working tree differs. Organizers publish the official value.
+- **No edited referee.** The card prints a sha256 of the referee's own source and the last commit
+  that touched it, with `(modified)` if the working tree differs. Organizers check that commit is
+  on this repo's `main` and that the hashes match it.
 - **No cloud models.** Ollama's `-cloud` tags run remotely and would still show as local; the
   team loader refuses any model name containing `cloud`.
 
@@ -262,17 +263,22 @@ opens things up to remote models.
 
 Scores are self-reported and the machines differ, so trust comes from process, not from the card:
 
-- **Fix the scored config** in the announcement: `PRESET=medium`, `ROWS=50`, and the official
-  stock sha256 (print it with `uv run python -c "from fightnight.team import load_team; from pathlib import Path; print(load_team(Path('teams/stock.yml')).sha256)"`). A card with another stock sha is not scored.
+- **Fix the scored config** in the announcement: `PRESET=medium`, `ROWS=50`, the stock team as
+  it is on `main`. If you change the stock team or its prompts after the announcement, say so;
+  `check-card` accepts whatever stock was at the card's commit, so an entrant on an older
+  `main` still passes.
 - **Never publish the scoring seed.** The generator is deterministic and public, so a seed is an
   answer key: anyone with it can run `make gen` and paste the golden file into a prompt. Pick it
   when submissions close, rerun every contender yourself from your own clone and your own `.env`,
   and keep it. Cards are markdown and can be edited by hand; the rerun is the check.
-- **Compare the Integrity section of each card** against the official values you publish with the
-  announcement: referee code sha256 (print it with `uv run python -c "from fightnight.integrity import referee_fingerprint; print(referee_fingerprint())"`),
-  the stock sha256, and the Ollama digest of `qwen2.5:3b`. A card with a different referee sha, a
-  `(modified)` git state, an unknown digest, an answer-key flag, or failed requests on the
-  stock side is not scored until you have rerun it.
+- **Check every card before you rerun it:** `make check-card CARD=their-fight-card.json`. It
+  verifies that the referee commit on the card is a commit on this repo's `main` and that the
+  referee code and stock team hashes match that commit, that `qwen2.5:3b` ran on the official
+  weights (digest `357c53fb659c`), that every team request was local, that the scored config was
+  used, and that no answer-key flag or stock-side failure is present. Because the check is
+  against `main`'s history, you can keep editing the repo: any card made from a clean checkout of
+  any `main` commit passes, a fork that edited the grader does not, and an uncommitted edit shows
+  as `(modified)`. PASS means rerun it; FAIL lists why.
 - **Measure the noise first.** Run `TEAM=teams/stock.yml make fight` a few times and publish the
   stock-vs-stock spread. Only deltas outside that band mean anything. On the reference machine
   the stock team scored 42.0 and 40.9 on the same seed in two runs, so expect a point or two.
