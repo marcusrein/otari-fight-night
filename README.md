@@ -280,6 +280,9 @@ fight.py ──► Otari (Docker, :8000) ──► Ollama (host, :11434)
   `OLLAMA_HOST=0.0.0.0 ollama serve` (or set that in the systemd unit). Compose maps
   `host.docker.internal` to the host for you. Moved Ollama to another port? Change both
   `OLLAMA_URL` and `OLLAMA_URL_FROM_DOCKER` in `.env`.
+- **Port 8000 is already in use** (`docker compose up` fails with "port is already allocated"
+  or "address already in use"): pick a free port and set it in `.env` as both `GATEWAY_PORT=8001`
+  and `OTARI_URL=http://localhost:8001`. The dashboard moves with it.
 - **Otari did not answer within 60s**: `docker compose logs otari`. A bad `.env` stops it at
   startup.
 - **424 provider_not_configured**: the model is not switched on in Otari. `make fight` does this
