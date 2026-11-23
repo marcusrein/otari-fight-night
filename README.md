@@ -193,6 +193,10 @@ sha256 so judges can see it was the real one.
 
 ### What is allowed, and what is not
 
+This is a $100 jam, so the rules are short and the checks exist mostly so the livestream rerun is
+never awkward. Judges reproduce the method: they run your team file on their machine, and that run
+is the score. Your card gets you into the top five; the rerun decides.
+
 The generator is public. Everything in `fightnight/corrupt.py` (the vendor list, the vendor to
 category map, the category synonyms, the date formats, the fixed year) is knowledge about the
 data, and knowledge about the data is what a good cleaning prompt is made of. **You may put any
@@ -217,9 +221,9 @@ What you may not do is hand the model the answers:
 - **No cloud models.** Ollama's `-cloud` tags run remotely and would still show as local; the
   team loader refuses any model name containing `cloud`.
 
-None of this stops someone determined. The thing that does is the rerun: the scoring seed is never
-published, the organizers run every contender on their own machine with their own clone, and that
-run is the score. Your card is evidence for the judges, not the score.
+None of this stops someone determined, and it does not have to: the scoring seed is never
+published and the organizers run every contender on their own machine with their own clone. A
+cheated card falls over on the rerun in about four minutes.
 
 ## Judging
 
