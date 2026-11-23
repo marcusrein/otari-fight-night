@@ -1,12 +1,21 @@
 # Otari Fight Night
 
-Two teams of local models. One messy spreadsheet. One gateway. Whose split of the job cleans it best on your machine?
+Two teams of local models. One messy spreadsheet. One gateway. Whose team cleans it best on your machine?
 
-Run [Otari](https://github.com/mozilla-ai/otari) on your own machine as the router in front of a small
-team of Ollama models, point the team at a deliberately terrible CSV, and get a fight card that says
-how your team did against the stock team on the same file, on the same hardware. Nothing leaves your
-machine unless you decide it should, and the card shows which provider served every request, taken
-from the header Otari stamps on each response.
+[Otari](https://github.com/mozilla-ai/otari) is Mozilla.ai's open-source model gateway, which
+can run as a container on your own machine. Here it sits in front of a few small Ollama models, and
+every model call goes through it. ([otari.ai](https://otari.ai) is the hosted version; this kit
+does not need it.)
+
+**The challenge.** A *team* here is a pipeline of models, not people: one short YAML file,
+`team.yml`, that says which model does which part of the job, in what batch sizes, with which
+prompts. The referee (a Python script in this repo) generates a deliberately terrible CSV, runs the
+*stock team* (`teams/stock.yml`, the fixed pipeline everyone is measured against) and then yours on
+the same file and the same hardware, and grades both. Edit `team.yml` and its prompts until yours
+beats the stock team by as much as you can, then submit the fight card that shows it.
+
+Nothing leaves your machine unless you decide it should, and the card shows which provider served
+every request, taken from the header Otari stamps on each response.
 
 ```
 Otari Fight Night: CSV cleanup
