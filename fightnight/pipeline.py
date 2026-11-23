@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import httpx
@@ -56,6 +57,7 @@ class StageStats:
     local_requests: int = 0
     refused_drops: int = 0  # real rows a model wanted to delete that plain code kept
     failed_requests: int = 0  # timeouts and gateway errors; their rows count as unparsed
+    provider_requests: dict[str, int] = field(default_factory=dict)
 
 
 def qualify_model(model: str) -> str:
@@ -103,7 +105,11 @@ def _salvage(text: str) -> list[dict] | None:
 
 
 def local_share(calls: list[Call]) -> float:
-    return sum(1 for c in calls if c.provider == "ollama") / len(calls) if calls else 1.0
+    """Share of answered requests that Otari says Ollama served. A failed request was served by
+    nobody, so it is left out here and shows up in the failed-requests count instead; otherwise one
+    timeout would drop a fully local team below 100%. An answer with no provider header is not local."""
+    served = [c for c in calls if not c.error]
+    return sum(1 for c in served if c.provider == "ollama") / len(served) if served else 1.0
 
 
 def _sample_csv(sample: list[dict]) -> str:
@@ -148,6 +154,7 @@ class Runner:
         qualified = qualify_model(model)
         st = self.stat(stage)
         error = ""
+        started = time.perf_counter()
         try:
             res = self.chat(qualified, messages, MAX_TOKENS_PER_ROW * len(rows) + 200)
         except httpx.HTTPError as e:
@@ -159,11 +166,14 @@ class Runner:
             error = str(e)[:200]
             res = None
         if res is None:
+            seconds = time.perf_counter() - started
             applied = [False] * len(rows)
             st.requests += 1
+            st.seconds += seconds
+            st.provider_requests["unknown"] = st.provider_requests.get("unknown", 0) + 1
             st.failed_requests += 1
             st.unparsed += len(rows)
-            self.on_call(Call(stage.name, model, qualified.split(":", 1)[0], len(rows), 0, 0.0, 0, 0, len(rows), error))
+            self.on_call(Call(stage.name, model, "unknown", len(rows), 0, seconds, 0, 0, len(rows), error))
             return rows, applied
         parsed = parse_rows(res.content)
         merged, applied = _merge(rows, parsed)
@@ -174,6 +184,7 @@ class Runner:
         st.prompt_tokens += res.prompt_tokens
         st.completion_tokens += res.completion_tokens
         provider = res.provider or "unknown"  # no header, no credit: locality is only ever claimed from Otari's own header
+        st.provider_requests[provider] = st.provider_requests.get(provider, 0) + 1
         st.local_requests += 1 if provider == "ollama" else 0
         self.on_call(Call(stage.name, model, provider, len(rows), len(parsed) if parsed else 0, res.seconds, res.prompt_tokens, res.completion_tokens, unparsed))
         return merged, applied

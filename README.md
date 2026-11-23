@@ -71,6 +71,9 @@ uv run fight.py
   repair per GB, share of requests served locally), Otari's own per-key usage, and a
   stage-by-stage table for your team. This is what you
   submit.
+  Its "Where the work went" table gives each stage's tokens, share of request time and
+  tokens, and which provider served it, so you can see which stage costs the most before you
+  decide whether it earns its place.
 - `fight-card.json`: the same data for the community "what runs on what" table.
 - `fight-log.jsonl`: every request (stage, model, provider, rows in and out, seconds, tokens).
 - `data/team.clean.csv` and `data/stock.clean.csv` next to `data/messy.csv` and `data/golden.csv`,

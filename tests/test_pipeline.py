@@ -302,6 +302,25 @@ def test_transport_error_keeps_rows_and_counts_failed_request(tmp_path):
     assert calls[0].error.startswith("ReadTimeout")
 
 
+def test_failed_request_records_elapsed_time_and_unknown_provider(tmp_path, monkeypatch):
+    import httpx
+    from fightnight import pipeline
+
+    ticks = iter([10.0, 12.5])
+    monkeypatch.setattr(pipeline.time, "perf_counter", lambda: next(ticks))
+    team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 10, prompt: prompts/p.md}\n")
+
+    def timeout(*args):
+        raise httpx.ReadTimeout("slow")
+
+    calls = []
+    _, stats = run_team(team, [dict(r) for r in ROWS], SAMPLE, timeout, calls.append)
+    assert calls[0].seconds == stats[0].seconds == 2.5
+    assert calls[0].provider == "unknown"
+    assert stats[0].provider_requests == {"unknown": 1}
+    assert local_share(calls) == 1.0  # nothing was served, so nothing was served remotely
+
+
 def test_empty_input_runs_without_error(tmp_path):
     team = team_from(tmp_path, "stages:\n  - {name: m, type: map, model: a, batch: 5, prompt: prompts/p.md}\n  - {name: v, type: verify, model: a, batch: 5, prompt: prompts/p.md}\n")
     out, stats = run_team(team, [], SAMPLE, FakeChat(echo), lambda c: None)
@@ -409,3 +428,12 @@ def test_junk_rows_match_junk_rows_in_order(tmp_path):
     out, stats = run_team(team, rows, SAMPLE, FakeChat(answer), lambda c: None)
     assert [r["id"] for r in out] == ["T0001", "T0002"] and all(r["vendor"] == "Fixed" for r in out)
     assert stats[0].unparsed == 0
+
+
+def test_local_share_leaves_out_failures_but_not_missing_headers():
+    def call(provider, error=""):
+        return Call("s", "m", provider, 1, 1, 0.1, 0, 0, 0, error)
+
+    assert local_share([call("ollama"), call("unknown", "ReadTimeout")]) == 1.0
+    assert local_share([call("ollama"), call("unknown")]) == 0.5  # answered without Otari's header: no credit
+    assert local_share([call("ollama"), call("otari-ai")]) == 0.5
