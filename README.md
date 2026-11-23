@@ -259,35 +259,6 @@ opens things up to remote models.
 - **Connectors.** A Sheets export or a bank download is a CSV. If you wire a real source up,
   show it in the video.
 
-## For organizers
-
-Scores are self-reported and the machines differ, so trust comes from process, not from the card:
-
-- **Fix the scored config** in the announcement: `PRESET=medium`, `ROWS=50`, the stock team as
-  it is on `main`. If you change the stock team or its prompts after the announcement, say so;
-  `check-card` accepts whatever stock was at the card's commit, so an entrant on an older
-  `main` still passes.
-- **Never publish the scoring seed.** The generator is deterministic and public, so a seed is an
-  answer key: anyone with it can run `make gen` and paste the golden file into a prompt. Pick it
-  when submissions close, rerun every contender yourself from your own clone and your own `.env`,
-  and keep it. Cards are markdown and can be edited by hand; the rerun is the check.
-- **Check every card before you rerun it:** `make check-card CARD=their-fight-card.json`. It
-  verifies that the referee commit on the card is a commit on this repo's `main` and that the
-  referee code and stock team hashes match that commit, that `qwen2.5:3b` ran on the official
-  weights (digest `357c53fb659c`), that every team request was local, that the scored config was
-  used, and that no answer-key flag or stock-side failure is present. Because the check is
-  against `main`'s history, you can keep editing the repo: any card made from a clean checkout of
-  any `main` commit passes, a fork that edited the grader does not, and an uncommitted edit shows
-  as `(modified)`. PASS means rerun it; FAIL lists why.
-- **Measure the noise first.** Run `TEAM=teams/stock.yml make fight` a few times and publish the
-  stock-vs-stock spread. Only deltas outside that band mean anything. On the reference machine
-  the stock team scored 42.0 and 40.9 on the same seed in two runs, so expect a point or two.
-- **Models must be plain public Ollama tags.** No `-cloud` tags (they leave the machine through
-  Ollama and still show as local), no custom Modelfiles (not reproducible). A team has to fit
-  in 16 GB.
-- **Local only for Jam Sesh #1.** A card with "requests served locally" below 100% is not
-  eligible.
-
 ## Submit
 
 The deadline is December 2, 2026. Submit on
@@ -299,59 +270,12 @@ The deadline is December 2, 2026. Submit on
    video).
 3. An email address to reach you if you win. Put it in the DoraHacks form, not in your repo.
 
-## How it is wired
+## More
 
-```
-fight.py ──► Otari (Docker, :8000) ──► Ollama (host, :11434)
-   │             one scoped key per team          └─► otari.ai (optional, hosted provider)
-   └── referee: makes the messy file, runs stock then yours, grades, writes the card
-```
-
-- `docker-compose.yml` runs Otari and points it at the host's Ollama.
-- `otari.yml` declares the `ollama` hosted provider and the two scoped keys. You should never
-  need to edit it.
-- `fightnight/corrupt.py` makes golden and messy files. `fightnight/grade.py` scores. Both plain
-  code, both tested.
-- `fightnight/pipeline.py` runs a team file. `fightnight/team.py` validates one.
-- `fightnight/otari.py` is the only code that talks to Otari: chat through the team keys, and
-  an admin step before a fight that switches the models on under the provider, because a hosted
-  provider declared in config starts with an empty roster. Every response's `otari-provider`
-  header is what the "requests served locally" share is computed from. A timeout or gateway
-  error on one request keeps those rows as they were and counts the request as failed; a
-  424 or 401 (misconfiguration) stops the fight with the message.
-- `fightnight/card.py` builds the card, pulling per-key usage from
-  `GET /api/v1/key/usage/summary`.
-
-## Troubleshooting
-
-- **Ollama is not answering**: start it. `ollama serve` or open the app.
-- **Otari cannot reach Ollama (preflight fails with 424 or a connection error) on Linux**: Ollama
-  listens on 127.0.0.1 by default, which the container cannot see. Run it with
-  `OLLAMA_HOST=0.0.0.0 ollama serve` (or set that in the systemd unit). Compose maps
-  `host.docker.internal` to the host for you. Moved Ollama to another port? Change both
-  `OLLAMA_URL` and `OLLAMA_URL_FROM_DOCKER` in `.env`.
-- **Port 8000 is already in use** (`docker compose up` fails with "port is already allocated"
-  or "address already in use"): pick a free port and set it in `.env` as both `GATEWAY_PORT=8001`
-  and `OTARI_URL=http://localhost:8001`. The dashboard moves with it.
-- **Otari did not answer within 60s**: `docker compose logs otari`. A bad `.env` stops it at
-  startup.
-- **424 provider_not_configured**: the model is not switched on in Otari. `make fight` does this
-  for you, so run it rather than calling the API by hand.
-- **Slow**: 3B models write about one row per second. `ROWS=20` for iteration, bigger batches for
-  fewer round trips, smaller batches when a model loses rows. A request that passes
-  `TIMEOUT_SECONDS` keeps its rows as they were and shows up as a failed request on the card.
-- **Thinking models** (`qwen3`, `deepseek-r1`, hosted `gpt-oss`) spend the per-request token
-  budget reasoning and get cut off. Check the "lost or garbled" column before trusting them.
-- **Fresh start**: `make reset` removes the containers, the Otari database, the generated data
-  and the cards. Delete `.env` too if you want new keys.
-
-## Tests
-
-```bash
-make test
-```
-
-Generator, grader, team loader, pipeline (with a fake gateway), card. No model needed.
+- [How it is wired](docs/wiring.md): compose, Otari config, what each module does, tests.
+- [Troubleshooting](docs/troubleshooting.md): Ollama on Linux, timeouts, slow fights, fresh start.
+- [For organizers](docs/organizers.md): the scored config, `check-card`, the rerun, noise.
+- [Design doc](docs/superpowers/specs/2026-11-20-csv-cleanup-fight-design.md): why it is built this way.
 
 ## License
 
