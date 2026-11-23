@@ -29,7 +29,7 @@ keys: .env
 	uv run fight.py keys
 
 dashboard:
-	@echo "http://localhost:8000  (sign in with the admin key: make keys)"
+	@echo "$$(sed -n 's/^OTARI_URL=//p' .env 2>/dev/null | grep . || echo http://localhost:8000)  (sign in with the admin key: make keys)"
 
 test:
 	uv run --group dev pytest -q

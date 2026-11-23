@@ -15,7 +15,7 @@ from typing import Callable
 from .corrupt import COLUMNS, corrupt, make_golden, read_csv, write_csv
 from .grade import Grade, grade
 from .otari import ChatResult, Otari
-from .pipeline import Call, StageStats, local_share, run_team
+from .pipeline import Call, StageStats, local_share, qualify_model, run_team
 from .team import Team
 
 DATA_DIR = Path("data")
@@ -110,6 +110,23 @@ def run_one(team: Team, messy: list[dict], golden: list[dict], sample: list[dict
     ), cleaned
 
 
+def warm_up(otari: Otari, team: Team, api_key: str, timeout: float) -> None:
+    """Reload a team's local models just before it runs, through Otari like every other call.
+
+    The preflight loads every model before the stock team starts, but Ollama unloads a model after
+    5 idle minutes and evicts one when memory runs short, so a model only your team uses can go cold
+    while stock runs. The request goes on the stock key, whose usage has already been read, so it
+    never lands in your team's numbers. Best effort: a failure here surfaces in the real run."""
+    for m in team.models():
+        if m.startswith("otari-ai:"):
+            continue
+        try:
+            res = otari.chat(api_key, qualify_model(m), [{"role": "user", "content": "Reply with the single word OK."}], 5, timeout)
+            print(f"  warm-up {m}: {res.seconds:.1f}s")
+        except Exception as e:  # noqa: BLE001 - best effort, see docstring
+            print(f"  warm-up {m} failed ({type(e).__name__}); continuing")
+
+
 def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, float], log_path: Path = Path("fight-log.jsonl")) -> FightResult:
     seed = settings.seed if settings.seed is not None else random.SystemRandom().randrange(1, 10**6)
     golden, messy, sha = make_dataset(seed, settings.rows, settings.preset)
@@ -122,6 +139,8 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
 
         results = {}
         for label, t, key in (("stock", stock, settings.key_stock), ("team", team, settings.key_team)):
+            if otari and label == "team":
+                warm_up(otari, t, settings.key_stock, settings.timeout_seconds)
             usage_fn = (lambda since, k=key: otari.key_usage(k, since)) if otari else None
             r, cleaned = run_one(t, messy, golden, sample, chat_via(otari, key, settings.timeout_seconds), log, sizes, usage_fn, label=label)
             write_csv(DATA_DIR / f"{label}.clean.csv", cleaned, COLUMNS)

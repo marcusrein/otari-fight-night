@@ -1,27 +1,29 @@
 # Submission
 
-Copy this file, fill in the four parts, and submit it the way the announcement says.
+Fill this in, commit it to your public repo, and link the repo on DoraHacks. Your email address
+goes in the DoraHacks form, not here: this file is public.
 
 ## 1. Fight card
 
-Paste `fight-card.md` here, or link to it in your fork. Run it twice with different seeds if you
-can; judges like a delta that holds.
+Paste your `fight-card.md` here. Its "Requests served locally" row must show 100% for your team and the official
+stock sha256 `13571dac3037`. Run it on a second seed too if you can; judges like a delta that holds.
 
 ## 2. Team
 
-Paste your `team.yml` and any prompt you changed or added. The team file sha256 must match the one
-on the fight card.
+Your `team.yml` and every prompt it uses are in the repo. The team sha256 on your card must match
+them. In a few sentences: why did you split the job this way, and which stage made the difference?
 
-## 3. Friction log (three bullets)
+## 3. Feedback (the friction log)
 
-What slowed you down or confused you: the setup, Otari, the referee, the team file. Specific
-beats polite.
+Specific beats polite.
 
--
--
--
+**Where did setup or the fight slow you down or break?** Steps to reproduce if you can.
 
-## 4. Show and tell
+**What did you look for in Otari (dashboard, logs, config) and not find?**
 
-Link to your write-up, post, or 60-second video. What did you learn about your models and your
-machine? What would you run `make clean` on for real?
+**Would you put Otari in front of your own local models after this? Why or why not?**
+
+## 4. Video
+
+Link to your screen recording, up to 3 minutes, with your voice: `make fight` running, your fight
+card, and what you changed in `team.yml` and why.
