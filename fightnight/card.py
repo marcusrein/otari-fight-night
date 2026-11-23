@@ -171,6 +171,21 @@ def render_md(card: dict) -> str:
         "These shares measure cost, not quality: to see whether a stage earns its place, remove or swap it and rerun on the same seed. "
         "Request time sums model calls, failed ones included; it is not wall-clock time. Providers come from Otari's response headers; a failed request has none and shows as unknown.",
     ]
+    integ = gw.get("integrity") or {}
+    if integ:
+        ref = integ.get("referee", {})
+        lines += [
+            "",
+            "## Integrity (what the organizers check against the rerun)",
+            "",
+            f"- Referee code sha256 `{ref.get('code_sha256', 'unknown')}`, git `{ref.get('git', 'unknown')}`",
+            "- Model digests from Ollama: " + ", ".join(f"`{m}` {d}" for m, d in integ.get("model_digests", {}).items()),
+            f"- Otari reached Ollama at `{gw.get('ollama_url_from_docker') or 'unknown'}`",
+            f"- Prompt bytes: stock {integ.get('prompt_bytes', {}).get('stock')}, yours {integ.get('prompt_bytes', {}).get('team')}",
+        ]
+        leaks = integ.get("prompt_leaks", {})
+        flagged = [f"{who}: {n}" for who, notes in leaks.items() for n in notes]
+        lines.append("- Answer-key check: " + ("**FLAGGED** " + "; ".join(flagged) if flagged else "no dataset ids or golden rows found in prompts"))
     lines += [
         "",
         "## Reproduce",

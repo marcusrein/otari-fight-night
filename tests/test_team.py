@@ -116,3 +116,21 @@ def test_unknown_keys_are_rejected(tmp_path):
     f = write(tmp_path, "name: x\nstages:\n  - name: a\n    type: map\n    modle: m\n    model: m\n    prompt: prompts/clean.md\n")
     with pytest.raises(TeamError, match="a.*modle"):
         load_team(f)
+
+
+def test_prompt_must_be_a_text_file_outside_data(tmp_path):
+    """A prompt is inserted verbatim into the system message, so pointing it at the golden file
+    would hand the model the answer key."""
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "golden.csv").write_text("id,date\nT0001,2026-01-01\n")
+    f = write(tmp_path, "name: x\nstages:\n  - name: a\n    type: map\n    model: m\n    prompt: data/golden.csv\n")
+    with pytest.raises(TeamError, match="a.*prompt.*\\.md"):
+        load_team(f)
+    (tmp_path / "prompts" / "notes.txt").write_text("fine\n")
+    load_team(write(tmp_path, "name: x\nstages:\n  - name: a\n    type: map\n    model: m\n    prompt: prompts/notes.txt\n"))
+
+
+def test_cloud_model_names_are_rejected(tmp_path):
+    f = write(tmp_path, "name: x\nstages:\n  - name: a\n    type: map\n    model: gpt-oss:120b-cloud\n    prompt: prompts/clean.md\n")
+    with pytest.raises(TeamError, match="a.*cloud"):
+        load_team(f)

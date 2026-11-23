@@ -5,8 +5,8 @@ goes in the DoraHacks form, not here: this file is public.
 
 ## 1. Fight card
 
-Paste your `fight-card.md` here. Its "Requests served locally" row must show 100% for your team and the official
-stock sha256 `13571dac3037`. Run it on a second seed too if you can; judges like a delta that holds.
+Paste your `fight-card.md` here. Its "Requests served locally" row must show 100% for your team, the official
+stock sha256 `13571dac3037`, and a clean answer-key check in the Integrity section. Run it on a second seed too if you can; judges like a delta that holds.
 
 ## 2. Team
 

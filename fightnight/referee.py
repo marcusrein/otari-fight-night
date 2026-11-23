@@ -46,14 +46,21 @@ class FightResult:
 
 
 def make_dataset(seed: int, rows: int, preset: str, out_dir: Path = DATA_DIR) -> tuple[list[dict], list[dict], str]:
-    """Write data/golden.csv and data/messy.csv; return (golden, messy, sha of messy)."""
+    """Write data/messy.csv; return (golden, messy, sha of messy). The golden file is written
+    only after both teams have run (write_golden), so nothing that runs during a fight can read it."""
     out_dir.mkdir(exist_ok=True)
     golden = make_golden(rows, random.Random(seed))
     messy = corrupt(golden, random.Random(seed + 1), preset)
-    write_csv(out_dir / "golden.csv", golden, COLUMNS)
+    stale = out_dir / "golden.csv"
+    if stale.exists():
+        stale.unlink()
     write_csv(out_dir / "messy.csv", messy, COLUMNS)
     sha = hashlib.sha256((out_dir / "messy.csv").read_bytes()).hexdigest()[:12]
     return golden, messy, sha
+
+
+def write_golden(golden: list[dict], out_dir: Path = DATA_DIR) -> None:
+    write_csv(out_dir / "golden.csv", golden, COLUMNS)
 
 
 def load_sample() -> list[dict]:
@@ -149,6 +156,7 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
             if failed:
                 print(f"  warning: {failed} request(s) timed out or failed; those rows were left as they were. Raise TIMEOUT_SECONDS or lower batch sizes.")
             results[label] = r
+        write_golden(golden)  # only now: nothing that ran during the fight could have read it
     return FightResult(seed=seed, preset=settings.preset, rows=len(golden), messy_rows=len(messy), dataset_sha=sha, stock=results["stock"], team=results["team"])
 
 

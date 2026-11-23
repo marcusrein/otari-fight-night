@@ -11,7 +11,9 @@ from . import card as cardmod
 from . import ollama, specs
 from .config import ENV_PATH, ConfigError, Settings, init_env, read_env_file
 from .otari import Otari, OtariError
+from .integrity import prompt_bytes, prompt_leaks, referee_fingerprint
 from .pipeline import qualify_model
+from .corrupt import read_csv
 from .referee import DATA_DIR, chat_via, clean_file, load_sample, make_dataset, run_fight
 from .team import Team, TeamError, load_team
 
@@ -121,13 +123,33 @@ def cmd_fight() -> None:
         die(str(e))
     except KeyboardInterrupt:
         die("stopped. No fight card written.")
-    gateway = {"otari_url": s.otari_url, "otari_version": otari_version(), "ollama_version": ollama_version}
+    try:
+        digests = ollama.digests(s.ollama_url)
+    except Exception:
+        digests = {}
+    golden = read_csv(DATA_DIR / "golden.csv")
+    leaks = {"team": prompt_leaks(team, golden), "stock": prompt_leaks(stock, golden)}
+    gateway = {
+        "otari_url": s.otari_url,
+        "otari_version": otari_version(),
+        "ollama_version": ollama_version,
+        "ollama_url_from_docker": read_env_file().get("OLLAMA_URL_FROM_DOCKER", ""),
+        "integrity": {
+            "referee": referee_fingerprint(),
+            "model_digests": {m: digests.get(m.removeprefix("ollama:"), "unknown") for m in dict.fromkeys(stock.models() + team.models()) if not m.startswith("otari-ai:")},
+            "prompt_bytes": {"team": prompt_bytes(team), "stock": prompt_bytes(stock)},
+            "prompt_leaks": leaks,
+        },
+    }
     card = cardmod.build(result, specs.collect(), gateway)
     cardmod.write(card)
     d = card["result"]["delta_points"]
     print()
     print(f"{card['team']['name']} net repair {card['team']['repair_pct']}% vs stock {card['stock']['repair_pct']}%: {'+' if d >= 0 else ''}{d} points.")
     print("wrote fight-card.md, fight-card.json, fight-log.jsonl and data/{stock,team}.clean.csv")
+    for who, notes in leaks.items():
+        for n in notes:
+            print(f"  warning: {who} prompt looks like it carries the answer key: {n}")
     print(f"dashboard: {s.otari_url}  (admin key: make keys)")
 
 

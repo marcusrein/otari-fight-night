@@ -101,10 +101,17 @@ def load_team(path: Path) -> Team:
             st.models = [str(m) for m in models]
             st.column = str(_need(name, raw, "column"))
         if kind in ("map", "vote", "verify"):
-            prompt = base / str(_need(name, raw, "prompt"))
+            prompt = (base / str(_need(name, raw, "prompt"))).resolve()
+            if prompt.suffix.lower() not in (".md", ".txt"):
+                raise TeamError(f"stage '{name}': prompt must be a .md or .txt file, not {prompt.name} (a prompt goes into the system message verbatim)")
+            if "data" in prompt.parts:
+                raise TeamError(f"stage '{name}': prompt cannot live under data/")
             if not prompt.exists():
                 raise TeamError(f"stage '{name}': prompt file {prompt.name} not found at {prompt}")
             st.prompt = prompt
+        for m in st.all_models():
+            if "cloud" in m.lower():
+                raise TeamError(f"stage '{name}': model '{m}' looks like an Ollama cloud model; those run remotely and are not allowed")
         if kind == "route":
             st.by = str(_need(name, raw, "by"))
             to = _need(name, raw, "to")

@@ -79,3 +79,17 @@ def sizes(base_url: str) -> dict[str, float]:
         if m["name"].endswith(":latest"):
             out[m["name"].removesuffix(":latest")] = gb
     return out
+
+
+def digests(base_url: str) -> dict[str, str]:
+    """Model name -> Ollama digest (first 12 hex). `ollama cp` can put any weights under any
+    name, so the card records what was really loaded and organizers publish the official ones."""
+    r = httpx.get(f"{base_url}/api/tags", timeout=10)
+    r.raise_for_status()
+    out: dict[str, str] = {}
+    for m in r.json().get("models", []):
+        d = str(m.get("digest", ""))[:12]
+        out[m["name"]] = d
+        if m["name"].endswith(":latest"):
+            out[m["name"].removesuffix(":latest")] = d
+    return out
