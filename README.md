@@ -13,6 +13,7 @@ prompts. The referee (a Python script in this repo) generates a deliberately ter
 *stock team* (`teams/stock.yml`, the fixed pipeline everyone is measured against) and then yours on
 the same file and the same hardware, and grades both. Edit `team.yml` and its prompts until yours
 beats the stock team by as much as you can, then submit the fight card that shows it.
+Submissions are open from November 25 to December 2, 2026 ([details below](#submit)).
 
 Nothing leaves your machine unless you decide it should, and the card shows which provider served
 every request, taken from the header Otari stamps on each response.
@@ -235,6 +236,9 @@ Scores are self-reported and the machines differ, so trust comes from process, n
 
 Fill in [SUBMISSION.md](SUBMISSION.md): fight card, team file and prompts, three friction bullets,
 and a link to your write-up or video.
+
+Submissions open 2026-11-25 12:00 and close 2026-12-02 12:00, on
+[DoraHacks](https://dorahacks.io/hackathon/2498/detail).
 
 ## How it is wired
 
