@@ -191,6 +191,36 @@ replays the exact file. `ROWS`, `PRESET`, `TEAM`, `TIMEOUT_SECONDS` are all in `
 team is always `teams/stock.yml` with its own prompts in `teams/stock/`; the card prints its
 sha256 so judges can see it was the real one.
 
+### What is allowed, and what is not
+
+The generator is public. Everything in `fightnight/corrupt.py` (the vendor list, the vendor to
+category map, the category synonyms, the date formats, the fixed year) is knowledge about the
+data, and knowledge about the data is what a good cleaning prompt is made of. **You may put any
+of it in a prompt.** A lookup table is a legitimate strategy; the model still has to apply it to
+every row.
+
+What you may not do is hand the model the answers:
+
+- **No golden rows or dataset ids in prompts or team files.** The referee writes `data/golden.csv`
+  only after both teams have run, scans every prompt for `T0000`-style ids and for lines that match
+  a golden row of the current dataset, and prints the result on the card. A flagged card is not
+  scored.
+- **No file but a `.md` or `.txt` as a prompt**, and nothing under `data/`. A prompt goes into the
+  system message verbatim, so `prompt: ../data/golden.csv` would be the answer key.
+- **No fake Ollama.** `OLLAMA_URL_FROM_DOCKER` must point at a real Ollama; the card records the URL
+  and every model's Ollama digest, and the rerun uses the organizers' machine anyway.
+- **No retagged models.** `ollama cp` can put any weights under any name. The card records the
+  digest Ollama reports for each model; the official digest for `qwen2.5:3b` is `357c53fb659c`.
+  A stock team running on different weights is a different stock team.
+- **No edited referee.** The card prints a sha256 of the referee's own source and the git commit
+  it ran from, with `(modified)` if the working tree differs. Organizers publish the official value.
+- **No cloud models.** Ollama's `-cloud` tags run remotely and would still show as local; the
+  team loader refuses any model name containing `cloud`.
+
+None of this stops someone determined. The thing that does is the rerun: the scoring seed is never
+published, the organizers run every contender on their own machine with their own clone, and that
+run is the score. Your card is evidence for the judges, not the score.
+
 ## Judging
 
 Out of 100, scored from the card, the team file, the log and your write-up:
@@ -204,9 +234,9 @@ Out of 100, scored from the card, the team file, the log and your write-up:
 | Friction log | 10 | Specific, honest answers to the three feedback questions in SUBMISSION.md |
 
 To be eligible: every request served locally (the card must show 100%), plain public Ollama tags,
-a team that fits in 16 GB, `PRESET=medium` and `ROWS=50`, and the official stock sha256
-`13571dac3037` on your card. The scoring seed is announced when submissions close; top entries are
-rerun on it on a 16 GB machine, and the rerun is what counts. The winner is announced on the
+a team that fits in 16 GB, `PRESET=medium` and `ROWS=50`, the official stock sha256
+`13571dac3037` on your card, and a clean answer-key check. The scoring seed is never published;
+top entries are rerun on it on a 16 GB machine, and the rerun is what counts. The winner is announced on the
 Mozilla OSAI livestream on December 8, where the winning team runs live.
 
 ## Stretch goals
@@ -230,8 +260,15 @@ Scores are self-reported and the machines differ, so trust comes from process, n
 
 - **Fix the scored config** in the announcement: `PRESET=medium`, `ROWS=50`, and the official
   stock sha256 (print it with `uv run python -c "from fightnight.team import load_team; from pathlib import Path; print(load_team(Path('teams/stock.yml')).sha256)"`). A card with another stock sha is not scored.
-- **Announce the scoring seed when submissions close**, then rerun every contender for the
-  "beat the stock team" points yourself. Cards are markdown and can be edited by hand; the rerun is the check.
+- **Never publish the scoring seed.** The generator is deterministic and public, so a seed is an
+  answer key: anyone with it can run `make gen` and paste the golden file into a prompt. Pick it
+  when submissions close, rerun every contender yourself from your own clone and your own `.env`,
+  and keep it. Cards are markdown and can be edited by hand; the rerun is the check.
+- **Compare the Integrity section of each card** against the official values you publish with the
+  announcement: referee code sha256 (print it with `uv run python -c "from fightnight.integrity import referee_fingerprint; print(referee_fingerprint())"`),
+  the stock sha256, and the Ollama digest of `qwen2.5:3b`. A card with a different referee sha, a
+  `(modified)` git state, an unknown digest, an answer-key flag, or failed requests on the
+  stock side is not scored until you have rerun it.
 - **Measure the noise first.** Run `TEAM=teams/stock.yml make fight` a few times and publish the
   stock-vs-stock spread. Only deltas outside that band mean anything. On the reference machine
   the stock team scored 42.0 and 40.9 on the same seed in two runs, so expect a point or two.

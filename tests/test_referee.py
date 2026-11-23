@@ -36,3 +36,15 @@ def test_warm_up_loads_each_local_model_once_on_the_given_key(capsys):
 
 def test_warm_up_failure_does_not_stop_the_fight():
     warm_up(_FakeOtari(fail=True), _team("qwen2.5:3b"), "stock-key", 30)
+
+
+def test_golden_is_not_on_disk_while_teams_run(tmp_path, monkeypatch):
+    """A prompt or a fake model server could read data/golden.csv; it is written only after grading."""
+    import fightnight.referee as ref
+
+    monkeypatch.chdir(tmp_path)
+    golden, messy, sha = ref.make_dataset(3, 10, "medium", Path("data"))
+    assert (Path("data") / "messy.csv").exists()
+    assert not (Path("data") / "golden.csv").exists()
+    ref.write_golden(golden, Path("data"))
+    assert (Path("data") / "golden.csv").exists()

@@ -89,3 +89,15 @@ def test_no_requests_has_no_expensive_stage_or_division_by_zero():
     assert card["team"]["stages"][0]["token_share_pct"] == 0
     assert card["team"]["stages"][0]["time_share_pct"] == 0
     assert "Most request time" not in render_md(card)
+
+
+def test_render_integrity_section():
+    gw = {"otari_url": "u", "otari_version": "v", "ollama_version": "o", "ollama_url_from_docker": "http://host.docker.internal:11434",
+          "integrity": {"referee": {"code_sha256": "abc", "git": "123 (modified)"}, "model_digests": {"qwen2.5:3b": "357c53fb659c"},
+                        "prompt_bytes": {"team": 900, "stock": 800}, "prompt_leaks": {"team": ["p.md: mentions dataset id(s) T0001"], "stock": []}}}
+    md = render_md(build(_fight(), {"os": "t", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, gw))
+    assert "## Integrity" in md and "357c53fb659c" in md and "(modified)" in md
+    assert "**FLAGGED** team: p.md: mentions dataset id(s) T0001" in md
+    gw["integrity"]["prompt_leaks"] = {"team": [], "stock": []}
+    md = render_md(build(_fight(), {"os": "t", "arch": "x", "cpu": "c", "ram_gb": 16, "gpu": "g", "gpu_note": ""}, gw))
+    assert "no dataset ids or golden rows found" in md
