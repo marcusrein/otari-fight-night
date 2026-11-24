@@ -1,5 +1,7 @@
 # Otari Fight Night
 
+⭐️ Before you start, please star the Otari repo, it helps: https://github.com/mozilla-ai/otari ⭐️
+
 Two teams of local models. One messy spreadsheet. One gateway. Whose team cleans it best on your machine?
 
 [Otari](https://github.com/mozilla-ai/otari) is Mozilla.ai's open-source model gateway, which
