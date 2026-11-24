@@ -134,10 +134,15 @@ def warm_up(otari: Otari, team: Team, api_key: str, timeout: float) -> None:
             print(f"  warm-up {m} failed ({type(e).__name__}); continuing")
 
 
-def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, float], log_path: Path = Path("fight-log.jsonl")) -> FightResult:
+def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, float], log_path: Path = Path("fight-log.jsonl"), out_dir: Path = DATA_DIR) -> FightResult:
     seed = settings.seed if settings.seed is not None else random.SystemRandom().randrange(1, 10**6)
-    golden, messy, sha = make_dataset(seed, settings.rows, settings.preset)
+    golden, messy, sha = make_dataset(seed, settings.rows, settings.preset, out_dir)
     sample = load_sample()
+    if out_dir != DATA_DIR:
+        write_csv(out_dir / "sample.csv", sample, COLUMNS)
+        # The last fight's copy in data/ is the answer key on a replayed SEED; it must not exist
+        # while this fight runs, same as the one in out_dir (make_dataset removed that).
+        (DATA_DIR / "golden.csv").unlink(missing_ok=True)
     print(f"  dataset: {len(golden)} clean rows -> {len(messy)} messy rows, preset {settings.preset}, seed {seed}")
     with log_path.open("w") as f:
         def log(row: dict) -> None:
@@ -150,13 +155,13 @@ def run_fight(settings, otari: Otari, team: Team, stock: Team, sizes: dict[str, 
                 warm_up(otari, t, settings.key_stock, settings.timeout_seconds)
             usage_fn = (lambda since, k=key: otari.key_usage(k, since)) if otari else None
             r, cleaned = run_one(t, messy, golden, sample, chat_via(otari, key, settings.timeout_seconds), log, sizes, usage_fn, label=label)
-            write_csv(DATA_DIR / f"{label}.clean.csv", cleaned, COLUMNS)
+            write_csv(out_dir / f"{label}.clean.csv", cleaned, COLUMNS)
             failed = sum(st.failed_requests for st in r.stages)
             print(f"  {label} ({t.name}): net repair {r.grade.repair_pct}% ({r.grade.fixed}/{r.grade.problems} fixed, {r.grade.broken} broken) in {r.seconds:.0f}s, {r.requests} requests" + (f", {failed} FAILED" if failed else "") + f", {r.weights_gb} GB of models, dup kept {r.grade.dup_kept}, dropped {r.grade.dropped}, junk kept {r.grade.junk_kept}")
             if failed:
                 print(f"  warning: {failed} request(s) timed out or failed; those rows were left as they were. Raise TIMEOUT_SECONDS or lower batch sizes.")
             results[label] = r
-        write_golden(golden)  # only now: nothing that ran during the fight could have read it
+        write_golden(golden, out_dir)  # only now: nothing that ran during the fight could have read it
     return FightResult(seed=seed, preset=settings.preset, rows=len(golden), messy_rows=len(messy), dataset_sha=sha, stock=results["stock"], team=results["team"])
 
 
