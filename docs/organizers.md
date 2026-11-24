@@ -6,6 +6,13 @@ Scores are self-reported and the machines differ, so trust comes from process, n
   it is on `main`. If you change the stock team or its prompts after the announcement, say so;
   `check-card` accepts whatever stock was at the card's commit, so an entrant on an older
   `main` still passes.
+- **The rerun, step by step.** When submissions close: pick the scoring seed by rolling it in
+  front of a witness and write it down. Run `make check-card CARD=<their fight-card.json>` on every
+  submission; the ones that pass and have the highest self-reported delta are the top five. For
+  each: clone their repo, copy their `team.yml` and prompts over a clean checkout of this repo's
+  `main`, run `SEED=<the seed> make fight`. About five minutes per entry on a 16 GB machine. Rank
+  by the rerun's delta. The self-reported card is evidence for the other rubric lines, not the
+  score.
 - **Never publish the scoring seed.** The generator is deterministic and public, so a seed is an
   answer key: anyone with it can run `make gen` and paste the golden file into a prompt. Pick it
   when submissions close, rerun every contender yourself from your own clone and your own `.env`,
