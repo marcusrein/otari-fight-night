@@ -13,7 +13,11 @@ prompts. The referee (a Python script in this repo) generates a deliberately ter
 *stock team* (`teams/stock.yml`, the fixed pipeline everyone is measured against) and then yours on
 the same file and the same hardware, and grades both. Edit `team.yml` and its prompts until yours
 beats the stock team by as much as you can, then submit the fight card that shows it.
-The jam runs online from November 25 to December 2, 2026, for one $100 prize ([details below](#submit)).
+The jam runs online from November 25 to December 2, 2026, 11:59 PM ET, for one $100 prize ([details below](#submit)).
+
+Bring your coding agent. It will read [AGENTS.md](AGENTS.md), which says what it may edit and what
+gets you disqualified. The fight itself stays local: every model call goes through Otari on your
+machine, and the card proves it.
 
 Nothing leaves your machine unless you decide it should, and the card shows which provider served
 every request, taken from the header Otari stamps on each response.
@@ -267,7 +271,7 @@ opens things up to remote models.
 
 ## Submit
 
-The deadline is December 2, 2026. Submit on
+The deadline is December 2, 2026, 11:59 PM ET. Submit on
 [DoraHacks](https://dorahacks.io/hackathon/2498/detail):
 
 1. A link to your public GitHub repo, made from this template, with your `team.yml`, every prompt
